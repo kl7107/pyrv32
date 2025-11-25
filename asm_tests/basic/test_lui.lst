@@ -1,0 +1,12 @@
+
+basic/test_lui.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00000000 <_start>:
+   0:	12345537          	lui	a0,0x12345
+   4:	abcde5b7          	lui	a1,0xabcde
+   8:	00000637          	lui	a2,0x0
+   c:	99999037          	lui	zero,0x99999
+  10:	00100073          	ebreak

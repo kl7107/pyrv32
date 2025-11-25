@@ -1,0 +1,7 @@
+*.pyc
+__pycache__/
+
+# Assembly test build artifacts
+*.bin
+*.o
+*.lst

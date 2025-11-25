@@ -1,0 +1,14 @@
+
+basic/test_addi.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00000000 <_start>:
+   0:	02a00513          	li	a0,42
+   4:	fff00593          	li	a1,-1
+   8:	00000613          	li	a2,0
+   c:	7ff00693          	li	a3,2047
+  10:	00a50713          	addi	a4,a0,10
+  14:	fec50793          	addi	a5,a0,-20
+  18:	00100073          	ebreak
