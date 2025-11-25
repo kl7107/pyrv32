@@ -58,27 +58,30 @@ pyrv32/
 ├── EXAMPLES.md         # Assembly code examples
 ├── docs/               # Detailed documentation
 │   ├── UART.md         # UART module reference
-│   └── ASSEMBLY_TESTS.md # Assembly test framework guide
+│   └── README.md       # Documentation index
 ├── pyrv32.py           # Main entry point
 ├── cpu.py              # CPU register state (x0-x31, PC, CSRs)
 ├── memory.py           # Byte-addressable memory with UART
 ├── uart.py             # UART transmitter module
 ├── decoder.py          # Instruction decoder
 ├── execute.py          # Instruction execution engine
-├── tests/              # Unit tests (37 tests)
+├── tests/              # Unit tests (50 tests)
 │   ├── __init__.py
 │   ├── test_cpu.py         # CPU tests (9)
 │   ├── test_memory.py      # Memory/UART tests (15)
 │   ├── test_decoder_utils.py # Decoder utilities (9)
-│   └── test_execute.py     # Execution tests (4)
-└── asm_tests/          # Assembly test framework (3 tests)
+│   ├── test_execute.py     # Execution tests - RV32I (4)
+│   └── test_execute_mul.py # MUL instruction tests - M ext (13)
+└── asm_tests/          # Assembly test framework (4 tests)
     ├── README.md       # Framework documentation
     ├── Makefile        # Build using riscv64-unknown-elf toolchain
     ├── run_tests.py    # Test runner with auto-verification
-    └── basic/          # Test collection
-        ├── test_hello.s
-        ├── test_lui.s
-        └── test_addi.s
+    ├── basic/          # RV32I test collection
+    │   ├── test_hello.s
+    │   ├── test_lui.s
+    │   └── test_addi.s
+    └── m_ext/          # M extension tests
+        └── test_mul.s
 ```
 
 ## Features Implemented
@@ -97,7 +100,8 @@ pyrv32/
 - See `docs/UART.md` for UART details
 
 ### Instructions (execute.py)
-Currently implemented RV32I instructions:
+
+#### RV32I Base Instructions (~95% complete)
 - **LUI** - Load Upper Immediate
 - **AUIPC** - Add Upper Immediate to PC
 - **ADDI** - Add Immediate
@@ -113,6 +117,18 @@ Currently implemented RV32I instructions:
 - **JAL/JALR** - Jump and Link
 - **BEQ/BNE/BLT/BGE/BLTU/BGEU** - Branch operations
 
+#### M Extension (Multiply/Divide) - In Progress
+- **MUL** ✅ - Multiply (lower 32 bits)
+- **MULH** - Multiply High (signed × signed, upper 32 bits)
+- **MULHSU** - Multiply High (signed × unsigned, upper 32 bits)
+- **MULHU** - Multiply High (unsigned × unsigned, upper 32 bits)
+- **DIV** - Divide (signed)
+- **DIVU** - Divide Unsigned
+- **REM** - Remainder (signed)
+- **REMU** - Remainder Unsigned
+
+**M Extension Progress**: 1/8 instructions (12.5%)
+
 ## Quick Start
 
 Run the simulator (includes all tests and demo):
@@ -121,11 +137,11 @@ python3 pyrv32.py
 ```
 
 This will:
-1. Run all 37 unit tests (CPU, memory, decoder utilities, execution)
+1. Run all 50 unit tests (CPU, memory, decoder utilities, execution, MUL)
 2. Run demo program that outputs "Hello\n" to UART
 3. Display results and register state
 
-**All 40 tests passing** ✅ (37 unit + 3 assembly)
+**All 54 tests passing** ✅ (50 unit + 4 assembly)
 
 ### Assembly Tests
 
@@ -135,7 +151,7 @@ python3 run_tests.py         # Run all assembly tests
 python3 run_tests.py -v      # Verbose mode
 ```
 
-See `docs/ASSEMBLY_TESTS.md` for details.
+See `asm_tests/README.md` for details.
 
 ## Design Principles
 

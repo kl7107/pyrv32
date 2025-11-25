@@ -22,6 +22,7 @@ from tests.test_cpu import run_cpu_tests
 from tests.test_memory import run_memory_tests
 from tests.test_execute import run_decoder_tests
 from tests.test_decoder_utils import run_all_tests as run_decoder_utils_tests
+from tests.test_execute_mul import main as run_mul_tests
 
 
 def run_all_tests():
@@ -40,6 +41,8 @@ def run_all_tests():
     log_paths.append(run_decoder_tests())
     print("Running Decoder Utility tests...")
     run_decoder_utils_tests()  # This one doesn't return a log path yet
+    print("Running MUL instruction tests...")
+    run_mul_tests()  # M extension tests
     
     return log_paths
 

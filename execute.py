@@ -182,8 +182,33 @@ def exec_load(cpu, memory, decoded):
     return True
 
 
+# ============================================================================
+# M Extension - Multiply/Divide Instructions
+# ============================================================================
+
+def exec_mul(rs1_signed, rs2_signed):
+    """
+    MUL - Multiply (lower 32 bits of signed multiplication)
+    
+    Performs signed multiplication of two 32-bit values and returns
+    the lower 32 bits of the 64-bit result.
+    
+    Args:
+        rs1_signed: First operand (signed 32-bit integer)
+        rs2_signed: Second operand (signed 32-bit integer)
+        
+    Returns:
+        Lower 32 bits of the multiplication result (as unsigned 32-bit)
+    """
+    # Perform 64-bit signed multiplication
+    product = rs1_signed * rs2_signed
+    
+    # Return lower 32 bits as unsigned
+    return product & 0xFFFFFFFF
+
+
 def exec_register_alu(cpu, decoded):
-    """Execute R-type ALU operations (ADD, SUB, AND, OR, XOR, etc.)"""
+    """Execute R-type ALU operations (ADD, SUB, AND, OR, XOR, MUL, etc.)"""
     funct3 = decoded['funct3']
     funct7 = decoded['funct7']
     rs1_val = cpu.read_reg(decoded['rs1'])
@@ -198,8 +223,10 @@ def exec_register_alu(cpu, decoded):
     if funct3 == 0b000:
         if funct7 == 0b0000000:  # ADD
             result = (rs1_val + rs2_val) & 0xFFFFFFFF
-        else:  # SUB
+        elif funct7 == 0b0100000:  # SUB
             result = (rs1_val - rs2_val) & 0xFFFFFFFF
+        elif funct7 == 0b0000001:  # MUL - M extension
+            result = exec_mul(rs1_signed, rs2_signed)
     
     elif funct3 == 0b001:  # SLL - Shift Left Logical
         shamt = rs2_val & 0x1F

@@ -28,18 +28,20 @@ All test output is logged to temporary files:
 
 ## Current Test Status
 
-**Total: 40 tests passing** ✅
+**Total: 54 tests passing** ✅
 
-### Unit Tests: 37 tests
+### Unit Tests: 50 tests
 - **CPU tests**: 9 tests (100% coverage)
 - **Memory tests**: 15 tests (100% coverage)
 - **Decoder utilities**: 9 tests (100% coverage)
-- **Execute tests**: 4 tests (~15% coverage)
+- **Execute tests**: 4 tests (~15% coverage - RV32I only)
+- **MUL tests**: 13 tests (100% coverage - M extension)
 
-### Assembly Tests: 3 tests
+### Assembly Tests: 4 tests
 - **hello_world**: UART output test
 - **lui_instruction**: LUI instruction test
 - **addi_instruction**: ADDI instruction test
+- **mul_instruction**: MUL instruction test (M extension)
 
 ## Unit Test Coverage
 
@@ -94,6 +96,24 @@ All test output is logged to temporary files:
 3. **SB to UART** - Store byte to memory-mapped UART
 4. **Full Sequence** - Multi-instruction integration
 
+### MUL Instruction (`test_execute_mul.py` - 13 tests)
+
+1. **Positive × Positive** - 2 × 3 = 6
+2. **Positive × Negative** - 2 × -3 = -6
+3. **Zero Multiplication** - 0 × 5 = 0
+4. **One Multiplication** - 1 × 1 = 1
+5. **Negative × Positive** - -2 × 1 = -2
+6. **Negative × Negative** - -1 × -1 = 1
+7. **Max Positive** - 0x7FFFFFFF × 1 = 0x7FFFFFFF
+8. **Max Negative** - 0x80000000 × 1 = 0x80000000
+9. **Overflow** - 0x10000 × 0x10000 lower bits = 0
+10. **Large Numbers** - 0xFFFF × 0x10001 = 0xFFFFFFFF
+11. **Powers of Two** - 8 × 16 = 128
+12. **Write to x0** - Result discarded, x0 stays 0
+13. **Same Register** - x5 × x5 = 49 (7 × 7)
+
+**M Extension Progress**: 1/8 instructions implemented (MUL complete)
+
 ## Test Organization
 
 ```
@@ -103,15 +123,18 @@ pyrv32/
 │   ├── test_cpu.py            # CPU register tests
 │   ├── test_memory.py         # Memory and UART tests
 │   ├── test_decoder_utils.py  # Decoder utilities
-│   └── test_execute.py        # Execution tests
+│   ├── test_execute.py        # Execution tests (RV32I)
+│   └── test_execute_mul.py    # MUL instruction tests (M ext)
 └── asm_tests/                 # Assembly tests
     ├── README.md              # Framework documentation
     ├── Makefile               # Build system
     ├── run_tests.py           # Test runner
-    └── basic/                 # Test collection
-        ├── test_hello.s
-        ├── test_lui.s
-        └── test_addi.s
+    ├── basic/                 # RV32I tests
+    │   ├── test_hello.s
+    │   ├── test_lui.s
+    │   └── test_addi.s
+    └── m_ext/                 # M extension tests
+        └── test_mul.s
 ```
 
 ## Running Tests
@@ -122,7 +145,7 @@ pyrv32/
 python3 pyrv32.py
 ```
 
-This runs all 37 unit tests, then the demo program.
+This runs all 50 unit tests, then the demo program.
 
 ### Individual Unit Test Modules
 
@@ -131,6 +154,7 @@ python3 tests/test_cpu.py
 python3 tests/test_memory.py
 python3 tests/test_decoder_utils.py
 python3 tests/test_execute.py
+python3 tests/test_execute_mul.py
 ```
 
 ### Assembly Tests
@@ -170,9 +194,11 @@ On failure:
 | uart.py | 5 | (via memory) | 100% | ✅ Complete |
 | decoder.py (utils) | 1 | 9 | 100% | ✅ Complete |
 | decoder.py (main) | 2 | 0 | 0% | ⚠️ Phase 2 |
-| execute.py | ~40 insns | 4 | ~15% | ⚠️ Phases 2-6 |
+| execute.py (RV32I) | ~40 insns | 4 | ~15% | ⚠️ Phases 2-6 |
+| execute.py (M ext) | 8 insns | 13 | 12.5% | 🔄 In Progress |
 
 **Foundation complete**: Core utilities are bulletproof ✅
+**M Extension**: MUL implemented (1/8 instructions) 🔄
 
 ## Future Testing Plans
 
