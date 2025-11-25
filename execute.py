@@ -251,6 +251,62 @@ def exec_mulhsu(rs1_signed, rs2_val):
     return (product >> 32) & 0xFFFFFFFF
 
 
+def exec_mulhu(rs1_val, rs2_val):
+    """
+    MULHU - Multiply High Unsigned-Unsigned (upper 32 bits of unsigned × unsigned)
+    
+    Performs unsigned multiplication of two 32-bit values and returns
+    the upper 32 bits of the 64-bit result.
+    
+    Args:
+        rs1_val: First operand (unsigned 32-bit integer)
+        rs2_val: Second operand (unsigned 32-bit integer)
+        
+    Returns:
+        Upper 32 bits of the multiplication result (as unsigned 32-bit)
+    """
+    # Both operands are unsigned (0 to 0xFFFFFFFF)
+    product = rs1_val * rs2_val
+    
+    # Return upper 32 bits as unsigned
+    return (product >> 32) & 0xFFFFFFFF
+
+
+def exec_div(rs1_signed, rs2_signed):
+    """
+    DIV - Divide Signed
+    
+    Performs signed division of two 32-bit integers.
+    
+    Special cases per RISC-V specification:
+    - Division by zero: returns -1 (0xFFFFFFFF)
+    - Overflow (0x80000000 / -1): returns 0x80000000
+    
+    Args:
+        rs1_signed: Dividend (signed 32-bit integer)
+        rs2_signed: Divisor (signed 32-bit integer)
+        
+    Returns:
+        Quotient as unsigned 32-bit value
+    """
+    # Division by zero
+    if rs2_signed == 0:
+        return 0xFFFFFFFF  # -1
+    
+    # Overflow case: most negative / -1
+    # In two's complement, -(-2^31) cannot be represented
+    if rs1_signed == -2147483648 and rs2_signed == -1:
+        return 0x80000000  # Return dividend unchanged
+    
+    # Signed division with truncation towards zero (not floor division)
+    # Python's // operator does floor division, but RISC-V DIV truncates towards zero
+    # Use int() to truncate towards zero
+    quotient = int(rs1_signed / rs2_signed)
+    
+    # Convert to unsigned 32-bit
+    return quotient & 0xFFFFFFFF
+
+
 def exec_register_alu(cpu, decoded):
     """Execute R-type ALU operations (ADD, SUB, AND, OR, XOR, MUL, etc.)"""
     funct3 = decoded['funct3']
@@ -285,11 +341,17 @@ def exec_register_alu(cpu, decoded):
         elif funct7 == 0b0000001:  # MULHSU - M extension
             result = exec_mulhsu(rs1_signed, rs2_val)
     
-    elif funct3 == 0b011:  # SLTU - Set Less Than Unsigned
-        result = 1 if rs1_val < rs2_val else 0
+    elif funct3 == 0b011:  # MULHU or SLTU
+        if funct7 == 0b0000001:  # MULHU - M extension
+            result = exec_mulhu(rs1_val, rs2_val)
+        else:  # SLTU - Set Less Than Unsigned
+            result = 1 if rs1_val < rs2_val else 0
     
-    elif funct3 == 0b100:  # XOR
-        result = (rs1_val ^ rs2_val) & 0xFFFFFFFF
+    elif funct3 == 0b100:  # DIV or XOR
+        if funct7 == 0b0000001:  # DIV - M extension
+            result = exec_div(rs1_signed, rs2_signed)
+        else:  # XOR
+            result = (rs1_val ^ rs2_val) & 0xFFFFFFFF
     
     elif funct3 == 0b101:
         shamt = rs2_val & 0x1F

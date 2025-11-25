@@ -25,6 +25,9 @@ from tests.test_decoder_utils import run_all_tests as run_decoder_utils_tests
 from tests.test_execute_mul import main as run_mul_tests
 from tests.test_execute_mulh import main as run_mulh_tests
 from tests.test_execute_mulhsu import main as run_mulhsu_tests
+from tests.test_execute_mulhu import main as run_mulhu_tests
+from tests.test_execute_div import main as run_div_tests
+from tests.test_execute_mulhu import main as run_mulhu_tests
 
 
 def run_all_tests():
@@ -49,6 +52,10 @@ def run_all_tests():
     run_mulh_tests()  # M extension tests
     print("Running MULHSU instruction tests...")
     run_mulhsu_tests()  # M extension tests
+    print("Running MULHU instruction tests...")
+    run_mulhu_tests()  # M extension tests
+    print("Running DIV instruction tests...")
+    run_div_tests()  # M extension tests
     
     return log_paths
 

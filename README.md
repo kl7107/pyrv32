@@ -72,9 +72,12 @@ pyrv32/
 │   ├── test_decoder_utils.py # Decoder utilities (9)
 │   ├── test_execute.py     # Execution tests - RV32I (4)
 │   ├── test_execute_mul.py # MUL instruction tests - M ext (13)
+│   ├── test_execute_mul.py  # MUL instruction tests - M ext (13)
 │   ├── test_execute_mulh.py # MULH instruction tests - M ext (13)
-│   └── test_execute_mulhsu.py # MULHSU instruction tests - M ext (13)
-└── asm_tests/          # Assembly test framework (6 tests)
+│   ├── test_execute_mulhsu.py # MULHSU instruction tests - M ext (13)
+│   ├── test_execute_mulhu.py # MULHU instruction tests - M ext (13)
+│   └── test_execute_div.py  # DIV instruction tests - M ext (13)
+└── asm_tests/          # Assembly test framework (8 tests)
     ├── README.md       # Framework documentation
     ├── Makefile        # Build using riscv64-unknown-elf toolchain
     ├── run_tests.py    # Test runner with auto-verification
@@ -85,7 +88,9 @@ pyrv32/
     └── m_ext/          # M extension tests
         ├── test_mul.s
         ├── test_mulh.s
-        └── test_mulhsu.s
+        ├── test_mulhsu.s
+        ├── test_mulhu.s
+        └── test_div.s
 ```
 
 ## Features Implemented
@@ -125,13 +130,13 @@ pyrv32/
 - **MUL** ✅ - Multiply (lower 32 bits)
 - **MULH** ✅ - Multiply High (signed × signed, upper 32 bits)
 - **MULHSU** ✅ - Multiply High (signed × unsigned, upper 32 bits)
-- **MULHU** - Multiply High (unsigned × unsigned, upper 32 bits)
-- **DIV** - Divide (signed)
+- **MULHU** ✅ - Multiply High (unsigned × unsigned, upper 32 bits)
+- **DIV** ✅ - Divide (signed)
 - **DIVU** - Divide Unsigned
 - **REM** - Remainder (signed)
 - **REMU** - Remainder Unsigned
 
-**M Extension Progress**: 3/8 instructions (37.5%)
+**M Extension Progress**: 5/8 instructions (62.5%)
 
 ## Quick Start
 
@@ -141,7 +146,7 @@ python3 pyrv32.py
 ```
 
 This will:
-1. Run all 76 unit tests (CPU, memory, decoder utilities, execution, MUL, MULH, MULHSU)
+1. Run all 102 unit tests (CPU, memory, decoder utilities, execution, MUL, MULH, MULHSU, MULHU, DIV)
 2. Run demo program that outputs "Hello\n" to UART
 3. Display results and register state
 

@@ -28,24 +28,27 @@ All test output is logged to temporary files:
 
 ## Current Test Status
 
-**Total: 80 tests passing** ✅
+**Total: 106 tests passing** ✅
 
-### Unit Tests: 76 tests
-- **CPU tests**: 9 tests (100% coverage)
-- **Memory tests**: 15 tests (100% coverage)
-- **Decoder utilities**: 9 tests (100% coverage)
-- **Execute tests**: 4 tests (~15% coverage - RV32I only)
+### Unit Tests: 102 tests
+- **CPU tests**: 12 tests (100% coverage)
+- **Memory tests**: 12 tests (100% coverage)
+- **Decoder utilities**: 13 tests (100% coverage)
 - **MUL tests**: 13 tests (100% coverage - M extension)
 - **MULH tests**: 13 tests (100% coverage - M extension)
 - **MULHSU tests**: 13 tests (100% coverage - M extension)
+- **MULHU tests**: 13 tests (100% coverage - M extension)
+- **DIV tests**: 13 tests (100% coverage - M extension)
 
-### Assembly Tests: 6 tests
+### Assembly Tests: 8 tests
 - **hello_world**: UART output test
 - **lui_instruction**: LUI instruction test
 - **addi_instruction**: ADDI instruction test
 - **mul_instruction**: MUL instruction test (M extension)
 - **mulh_instruction**: MULH instruction test (M extension)
 - **mulhsu_instruction**: MULHSU instruction test (M extension)
+- **mulhu_instruction**: MULHU instruction test (M extension)
+- **div_instruction**: DIV instruction test (M extension)
 
 ## Unit Test Coverage
 
@@ -154,6 +157,56 @@ All test output is logged to temporary files:
 
 **M Extension Progress**: 3/8 instructions implemented (MUL, MULH, MULHSU complete)
 
+### MULHU Instruction (`test_execute_mulhu.py` - 13 tests)
+
+**File**: `tests/test_execute_mulhu.py`
+
+**Coverage**:
+1. **Small Values**: 2 × 3, upper = 0
+2. **Medium Values**: 100 × 200, upper = 0
+3. **Max Unsigned Squared**: 0xFFFFFFFF × 0xFFFFFFFF, upper = 0xFFFFFFFE
+4. **Large × 2**: 0x80000000 × 2, upper = 1
+5. **0x80000000 Squared**: 0x80000000 × 0x80000000, upper = 0x40000000
+6. **0x40000000 Squared**: 0x40000000 × 0x40000000, upper = 0x10000000
+7. **Max Unsigned × 1**: 0xFFFFFFFF × 1, upper = 0
+8. **0x10000 Squared**: 0x10000 × 0x10000, upper = 1
+9. **Max × 0x80000000**: 0xFFFFFFFF × 0x80000000, upper = 0x7FFFFFFF
+10. **0xFFFF Squared**: 0xFFFF × 0xFFFF, upper = 0
+11. **Zero**: 0 × anything = 0
+12. **Commutative**: Verifies a × b == b × a
+13. **Power of Two**: 0x1000000 × 0x100, upper = 1
+
+**Assembly Test**: `asm_tests/m_ext/test_mulhu.s`
+- 5 verified results: x10=0, x11=0, x12=0xFFFFFFFE, x13=1, x14=0x40000000
+- Additional edge cases for manual inspection
+
+**M Extension Progress**: 4/8 instructions implemented (MUL, MULH, MULHSU, MULHU complete)
+
+### DIV Instruction (`test_execute_div.py` - 13 tests)
+
+**File**: `tests/test_execute_div.py`
+
+**Coverage**:
+1. **Normal Division**: 10 / 2 = 5
+2. **Negative Result**: 10 / -2 = -5
+3. **Division by Zero**: 100 / 0 = -1 (RISC-V spec)
+4. **Overflow**: 0x80000000 / -1 = 0x80000000 (RISC-V spec)
+5. **Zero Dividend**: 0 / 5 = 0
+6. **Negative / Negative**: -10 / -2 = 5
+7. **Truncate Positive**: 7 / 2 = 3 (not 4)
+8. **Truncate Negative**: -7 / 2 = -3 (not -4, towards zero)
+9. **Division by 1**: 12345 / 1 = 12345
+10. **Division by -1**: 100 / -1 = -100 (non-overflow)
+11. **Large Numbers**: 1000000 / 3 = 333333
+12. **Max Positive**: 0x7FFFFFFF / 2 = 0x3FFFFFFF
+13. **Max Negative**: 0x80000000 / 2 = 0xC0000000
+
+**Assembly Test**: `asm_tests/m_ext/test_div.s`
+- 5 verified results: x10=5, x11=-5, x12=-1, x13=0x80000000, x14=0
+- Additional edge cases: truncation, sign combinations, large values
+
+**M Extension Progress**: 5/8 instructions implemented (MUL, MULH, MULHSU, MULHU, DIV complete)
+
 ## Test Organization
 
 ```
@@ -177,7 +230,9 @@ pyrv32/
     └── m_ext/                 # M extension tests
         ├── test_mul.s
         ├── test_mulh.s
-        └── test_mulhsu.s
+        ├── test_mulhsu.s
+        ├── test_mulhu.s
+        └── test_div.s
 ```
 
 ## Running Tests
@@ -188,7 +243,7 @@ pyrv32/
 python3 pyrv32.py
 ```
 
-This runs all 76 unit tests, then the demo program.
+This runs all 102 unit tests, then the demo program.
 
 ### Individual Unit Test Modules
 
@@ -196,10 +251,11 @@ This runs all 76 unit tests, then the demo program.
 python3 tests/test_cpu.py
 python3 tests/test_memory.py
 python3 tests/test_decoder_utils.py
-python3 tests/test_execute.py
 python3 tests/test_execute_mul.py
 python3 tests/test_execute_mulh.py
 python3 tests/test_execute_mulhsu.py
+python3 tests/test_execute_mulhu.py
+python3 tests/test_execute_div.py
 ```
 
 ### Assembly Tests
