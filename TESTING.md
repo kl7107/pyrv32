@@ -28,27 +28,27 @@ All test output is logged to temporary files:
 
 ## Current Test Status
 
-**Total: 106 tests passing** ✅
+**Total: 152 tests passing** ✅
 
-### Unit Tests: 102 tests
+### Unit Tests: 141 tests
 - **CPU tests**: 12 tests (100% coverage)
 - **Memory tests**: 12 tests (100% coverage)
 - **Decoder utilities**: 13 tests (100% coverage)
-- **MUL tests**: 13 tests (100% coverage - M extension)
-- **MULH tests**: 13 tests (100% coverage - M extension)
-- **MULHSU tests**: 13 tests (100% coverage - M extension)
-- **MULHU tests**: 13 tests (100% coverage - M extension)
-- **DIV tests**: 13 tests (100% coverage - M extension)
+- **M Extension**: 104 tests (100% coverage - all 8 instructions)
+  - MUL: 13 tests
+  - MULH: 13 tests
+  - MULHSU: 13 tests
+  - MULHU: 13 tests
+  - DIV: 13 tests
+  - DIVU: 13 tests
+  - REM: 13 tests
+  - REMU: 13 tests
 
-### Assembly Tests: 8 tests
+### Assembly Tests: 11 tests
 - **hello_world**: UART output test
 - **lui_instruction**: LUI instruction test
 - **addi_instruction**: ADDI instruction test
-- **mul_instruction**: MUL instruction test (M extension)
-- **mulh_instruction**: MULH instruction test (M extension)
-- **mulhsu_instruction**: MULHSU instruction test (M extension)
-- **mulhu_instruction**: MULHU instruction test (M extension)
-- **div_instruction**: DIV instruction test (M extension)
+- **M Extension** (8 tests): mul, mulh, mulhsu, mulhu, div, divu, rem, remu
 
 ## Unit Test Coverage
 

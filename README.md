@@ -126,17 +126,17 @@ pyrv32/
 - **JAL/JALR** - Jump and Link
 - **BEQ/BNE/BLT/BGE/BLTU/BGEU** - Branch operations
 
-#### M Extension (Multiply/Divide) - In Progress
+#### M Extension (Multiply/Divide) ✅ COMPLETE
 - **MUL** ✅ - Multiply (lower 32 bits)
 - **MULH** ✅ - Multiply High (signed × signed, upper 32 bits)
 - **MULHSU** ✅ - Multiply High (signed × unsigned, upper 32 bits)
 - **MULHU** ✅ - Multiply High (unsigned × unsigned, upper 32 bits)
 - **DIV** ✅ - Divide (signed)
-- **DIVU** - Divide Unsigned
-- **REM** - Remainder (signed)
-- **REMU** - Remainder Unsigned
+- **DIVU** ✅ - Divide Unsigned
+- **REM** ✅ - Remainder (signed)
+- **REMU** ✅ - Remainder Unsigned
 
-**M Extension Progress**: 5/8 instructions (62.5%)
+**M Extension**: 8/8 instructions (100%) ✅
 
 ## Quick Start
 
@@ -146,7 +146,7 @@ python3 pyrv32.py
 ```
 
 This will:
-1. Run all 102 unit tests (CPU, memory, decoder utilities, execution, MUL, MULH, MULHSU, MULHU, DIV)
+1. Run all 141 unit tests (CPU, memory, decoder + complete M extension)
 2. Run demo program that outputs "Hello\n" to UART
 3. Display results and register state
 

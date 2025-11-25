@@ -307,6 +307,97 @@ def exec_div(rs1_signed, rs2_signed):
     return quotient & 0xFFFFFFFF
 
 
+def exec_divu(rs1_val, rs2_val):
+    """
+    DIVU - Divide Unsigned
+    
+    Performs unsigned division of two 32-bit integers.
+    
+    Special cases per RISC-V specification:
+    - Division by zero: returns 0xFFFFFFFF (all 1s)
+    
+    Args:
+        rs1_val: Dividend (unsigned 32-bit integer)
+        rs2_val: Divisor (unsigned 32-bit integer)
+        
+    Returns:
+        Quotient as unsigned 32-bit value
+    """
+    # Division by zero
+    if rs2_val == 0:
+        return 0xFFFFFFFF  # All 1s
+    
+    # Unsigned division (straightforward)
+    quotient = rs1_val // rs2_val
+    
+    # Already unsigned 32-bit
+    return quotient & 0xFFFFFFFF
+
+
+def exec_rem(rs1_signed, rs2_signed):
+    """
+    REM - Remainder Signed
+    
+    Computes the signed remainder of division.
+    
+    Special cases per RISC-V specification:
+    - Division by zero: returns dividend (rs1)
+    - Overflow (0x80000000 % -1): returns 0
+    - Remainder has same sign as dividend
+    
+    Args:
+        rs1_signed: Dividend (signed 32-bit integer)
+        rs2_signed: Divisor (signed 32-bit integer)
+        
+    Returns:
+        Remainder as unsigned 32-bit value
+    """
+    # Division by zero
+    if rs2_signed == 0:
+        return rs1_signed & 0xFFFFFFFF  # Return dividend
+    
+    # Overflow case: most negative % -1
+    if rs1_signed == -2147483648 and rs2_signed == -1:
+        return 0  # Per RISC-V spec
+    
+    # Signed remainder
+    # Python's % operator gives remainder with sign of divisor,
+    # but RISC-V REM gives remainder with sign of dividend
+    # Use: a % b = a - (a / b) * b where / truncates towards zero
+    quotient = int(rs1_signed / rs2_signed)
+    remainder = rs1_signed - quotient * rs2_signed
+    
+    # Convert to unsigned 32-bit
+    return remainder & 0xFFFFFFFF
+
+
+def exec_remu(rs1_val, rs2_val):
+    """
+    REMU - Remainder Unsigned
+    
+    Computes the unsigned remainder of division.
+    
+    Special cases per RISC-V specification:
+    - Division by zero: returns dividend (rs1)
+    
+    Args:
+        rs1_val: Dividend (unsigned 32-bit integer)
+        rs2_val: Divisor (unsigned 32-bit integer)
+        
+    Returns:
+        Remainder as unsigned 32-bit value
+    """
+    # Division by zero
+    if rs2_val == 0:
+        return rs1_val  # Return dividend
+    
+    # Unsigned remainder (straightforward)
+    remainder = rs1_val % rs2_val
+    
+    # Already unsigned 32-bit
+    return remainder & 0xFFFFFFFF
+
+
 def exec_register_alu(cpu, decoded):
     """Execute R-type ALU operations (ADD, SUB, AND, OR, XOR, MUL, etc.)"""
     funct3 = decoded['funct3']
@@ -357,18 +448,26 @@ def exec_register_alu(cpu, decoded):
         shamt = rs2_val & 0x1F
         if funct7 == 0b0000000:  # SRL - Shift Right Logical
             result = (rs1_val >> shamt) & 0xFFFFFFFF
-        else:  # SRA - Shift Right Arithmetic
+        elif funct7 == 0b0100000:  # SRA - Shift Right Arithmetic
             if rs1_val & 0x80000000:
                 result = (rs1_val >> shamt) | (0xFFFFFFFF << (32 - shamt))
             else:
-                result = rs1_val >> shamt
+                result = (rs1_val >> shamt) & 0xFFFFFFFF
             result &= 0xFFFFFFFF
+        elif funct7 == 0b0000001:  # DIVU - M extension
+            result = exec_divu(rs1_val, rs2_val)
     
-    elif funct3 == 0b110:  # OR
-        result = (rs1_val | rs2_val) & 0xFFFFFFFF
+    elif funct3 == 0b110:  # REM or OR
+        if funct7 == 0b0000001:  # REM - M extension
+            result = exec_rem(rs1_signed, rs2_signed)
+        else:  # OR
+            result = (rs1_val | rs2_val) & 0xFFFFFFFF
     
-    elif funct3 == 0b111:  # AND
-        result = (rs1_val & rs2_val) & 0xFFFFFFFF
+    elif funct3 == 0b111:  # REMU or AND
+        if funct7 == 0b0000001:  # REMU - M extension
+            result = exec_remu(rs1_val, rs2_val)
+        else:  # AND
+            result = (rs1_val & rs2_val) & 0xFFFFFFFF
     
     cpu.write_reg(decoded['rd'], result)
     cpu.pc += 4

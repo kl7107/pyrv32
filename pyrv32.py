@@ -27,6 +27,9 @@ from tests.test_execute_mulh import main as run_mulh_tests
 from tests.test_execute_mulhsu import main as run_mulhsu_tests
 from tests.test_execute_mulhu import main as run_mulhu_tests
 from tests.test_execute_div import main as run_div_tests
+from tests.test_execute_divu import main as run_divu_tests
+from tests.test_execute_rem import main as run_rem_tests
+from tests.test_execute_remu import main as run_remu_tests
 from tests.test_execute_mulhu import main as run_mulhu_tests
 
 
@@ -56,6 +59,12 @@ def run_all_tests():
     run_mulhu_tests()  # M extension tests
     print("Running DIV instruction tests...")
     run_div_tests()  # M extension tests
+    print("Running DIVU instruction tests...")
+    run_divu_tests()  # M extension tests
+    print("Running REM instruction tests...")
+    run_rem_tests()  # M extension tests
+    print("Running REMU instruction tests...")
+    run_remu_tests()  # M extension tests
     
     return log_paths
 
