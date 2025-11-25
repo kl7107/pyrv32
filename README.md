@@ -54,43 +54,19 @@ For a simple user-space simulator, minimal CSR set:
 ```
 pyrv32/
 ├── README.md           # This file
-├── TESTING.md          # Testing documentation and status
-├── EXAMPLES.md         # Assembly code examples
-├── docs/               # Detailed documentation
-│   ├── UART.md         # UART module reference
-│   └── README.md       # Documentation index
 ├── pyrv32.py           # Main entry point
 ├── cpu.py              # CPU register state (x0-x31, PC, CSRs)
 ├── memory.py           # Byte-addressable memory with UART
 ├── uart.py             # UART transmitter module
 ├── decoder.py          # Instruction decoder
 ├── execute.py          # Instruction execution engine
-├── tests/              # Unit tests (76 tests)
-│   ├── __init__.py
-│   ├── test_cpu.py         # CPU tests (9)
-│   ├── test_memory.py      # Memory/UART tests (15)
-│   ├── test_decoder_utils.py # Decoder utilities (9)
-│   ├── test_execute.py     # Execution tests - RV32I (4)
-│   ├── test_execute_mul.py # MUL instruction tests - M ext (13)
-│   ├── test_execute_mul.py  # MUL instruction tests - M ext (13)
-│   ├── test_execute_mulh.py # MULH instruction tests - M ext (13)
-│   ├── test_execute_mulhsu.py # MULHSU instruction tests - M ext (13)
-│   ├── test_execute_mulhu.py # MULHU instruction tests - M ext (13)
-│   └── test_execute_div.py  # DIV instruction tests - M ext (13)
-└── asm_tests/          # Assembly test framework (8 tests)
-    ├── README.md       # Framework documentation
-    ├── Makefile        # Build using riscv64-unknown-elf toolchain
+├── tests/              # Unit tests
+│   └── test_*.py       # CPU, memory, decoder, execute tests
+└── asm_tests/          # Assembly test framework
     ├── run_tests.py    # Test runner with auto-verification
-    ├── basic/          # RV32I test collection
-    │   ├── test_hello.s
-    │   ├── test_lui.s
-    │   └── test_addi.s
+    ├── Makefile        # Build using riscv64-unknown-elf toolchain
+    ├── basic/          # RV32I base instruction tests
     └── m_ext/          # M extension tests
-        ├── test_mul.s
-        ├── test_mulh.s
-        ├── test_mulhsu.s
-        ├── test_mulhu.s
-        └── test_div.s
 ```
 
 ## Features Implemented
@@ -106,65 +82,37 @@ pyrv32/
 - Little-endian word/halfword access
 - Memory-mapped UART TX at **0x10000000**
 - UART module (uart.py) writes raw binary output
-- See `docs/UART.md` for UART details
 
-### Instructions (execute.py)
-
-#### RV32I Base Instructions (~95% complete)
-- **LUI** - Load Upper Immediate
-- **AUIPC** - Add Upper Immediate to PC
-- **ADDI** - Add Immediate
-- **SLTI/SLTIU** - Set Less Than Immediate
-- **XORI/ORI/ANDI** - Bitwise operations with immediate
-- **SLLI/SRLI/SRAI** - Shift operations
-- **SB/SH/SW** - Store Byte/Halfword/Word
-- **LB/LH/LW/LBU/LHU** - Load operations
-- **ADD/SUB** - Add/Subtract
-- **AND/OR/XOR** - Bitwise operations
-- **SLL/SRL/SRA** - Shift operations
-- **SLT/SLTU** - Set Less Than
-- **JAL/JALR** - Jump and Link
-- **BEQ/BNE/BLT/BGE/BLTU/BGEU** - Branch operations
-
-#### M Extension (Multiply/Divide) ✅ COMPLETE
-
-| Instruction | Encoding | Function |
-|-------------|----------|----------|
-| **MUL** | funct3=000, funct7=0000001 | Lower 32 bits of signed multiplication |
-| **MULH** | funct3=001, funct7=0000001 | Upper 32 bits (signed × signed) |
-| **MULHSU** | funct3=010, funct7=0000001 | Upper 32 bits (signed × unsigned) |
-| **MULHU** | funct3=011, funct7=0000001 | Upper 32 bits (unsigned × unsigned) |
-| **DIV** | funct3=100, funct7=0000001 | Signed division |
-| **DIVU** | funct3=101, funct7=0000001 | Unsigned division |
-| **REM** | funct3=110, funct7=0000001 | Signed remainder |
-| **REMU** | funct3=111, funct7=0000001 | Unsigned remainder |
-
-**Status**: 8/8 instructions (100%) ✅  
-**Implementation details and RISC-V special cases documented in `execute.py` docstrings.**
+### Decoder & Executor (decoder.py, execute.py)
+- Instruction decoder extracts opcode, funct3, funct7, registers, immediates
+- Executor implements RV32I base ISA (~95% complete)
+- Full M extension support (multiply/divide) - 8/8 instructions (100%) ✅
+- See source files for detailed instruction listings and implementation notes
 
 ## Quick Start
 
-Run the simulator (includes all tests and demo):
+Run the simulator (includes all tests):
 ```bash
 python3 pyrv32.py
 ```
 
 This will:
-1. Run all 141 unit tests (CPU, memory, decoder + complete M extension)
-2. Run demo program that outputs "Hello\n" to UART
-3. Display results and register state
+1. Run all unit tests (CPU, memory, decoder, execute)
+2. Run all assembly tests (basic + M extension)
+3. Display results
 
-**All 152 tests passing** ✅ (141 unit + 11 assembly)
-
-### Assembly Tests
-
+Run binary file:
 ```bash
-cd asm_tests
-python3 run_tests.py         # Run all assembly tests
-python3 run_tests.py -v      # Verbose mode
+python3 pyrv32.py program.bin          # Run with all tests first
+python3 pyrv32.py --no-test prog.bin   # Run without tests
+python3 pyrv32.py -v program.bin       # Run with instruction trace
 ```
 
-See `asm_tests/README.md` for details.
+Run only assembly tests:
+```bash
+python3 pyrv32.py --asm-test           # Assembly tests only
+python3 pyrv32.py --asm-test -v        # Verbose mode
+```
 
 ## Design Principles
 
@@ -173,9 +121,4 @@ See `asm_tests/README.md` for details.
 3. **Simple data structures**: Use lists and basic types
 4. **Minimal abstraction**: Don't over-engineer
 5. **Modular organization**: Separate files by logical function
-6. **Extensive unit testing**: 
-   - Test every function and behavior
-   - Tests run automatically at program start
-   - Verbose logging to temp files for analysis
-   - Fail-fast: exit immediately on first test failure
-   - Makes debugging easier and prevents regressions
+6. **Comprehensive testing**: Unit tests + assembly tests
