@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 pyrv32 - Simple RV32IMC Instruction Simulator
 
