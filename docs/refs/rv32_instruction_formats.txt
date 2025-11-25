@@ -1,0 +1,190 @@
+RV32 Instruction Formats Cheat Sheet
+====================================
+
+All instructions are 32 bits wide.
+Bit positions: 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0
+
+R-Type: Register-Register Operations
+-------------------------------------
+  31        25 24    20 19    15 14  12 11     7 6      0
+ ┌───────────┬────────┬────────┬──────┬────────┬────────┐
+ │  funct7   │  rs2   │  rs1   │funct3│   rd   │ opcode │
+ └───────────┴────────┴────────┴──────┴────────┴────────┘
+    7 bits     5 bits   5 bits  3 bits  5 bits   7 bits
+
+Examples: ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+          MUL, MULH, MULHSU, MULHU, DIV, DIVU, REM, REMU
+
+
+I-Type: Immediate Operations
+-----------------------------
+  31                20 19    15 14  12 11     7 6      0
+ ┌───────────────────┬────────┬──────┬────────┬────────┐
+ │     imm[11:0]     │  rs1   │funct3│   rd   │ opcode │
+ └───────────────────┴────────┴──────┴────────┴────────┘
+      12 bits          5 bits  3 bits  5 bits   7 bits
+
+Examples: ADDI, SLTI, SLTIU, XORI, ORI, ANDI
+          LB, LH, LW, LBU, LHU
+          JALR
+          SLLI, SRLI, SRAI (special: imm[11:5] is funct7, imm[4:0] is shamt)
+
+
+S-Type: Store Operations
+-------------------------
+  31        25 24    20 19    15 14  12 11     7 6      0
+ ┌───────────┬────────┬────────┬──────┬────────┬────────┐
+ │ imm[11:5] │  rs2   │  rs1   │funct3│imm[4:0]│ opcode │
+ └───────────┴────────┴────────┴──────┴────────┴────────┘
+    7 bits     5 bits   5 bits  3 bits  5 bits   7 bits
+
+Examples: SB, SH, SW
+
+
+B-Type: Branch Operations
+--------------------------
+  31 30      25 24    20 19    15 14  12 11      8 7 6      0
+ ┌──┬─────────┬────────┬────────┬──────┬────────┬─┬────────┐
+ │12│ [10:5]  │  rs2   │  rs1   │funct3│ [4:1]  │11 opcode │
+ └──┴─────────┴────────┴────────┴──────┴────────┴─┴────────┘
+  1   6 bits    5 bits   5 bits  3 bits  4 bits  1  7 bits
+
+imm[12|10:5|4:1|11] - immediate is sign-extended and multiplied by 2
+
+Examples: BEQ, BNE, BLT, BGE, BLTU, BGEU
+
+
+U-Type: Upper Immediate Operations
+-----------------------------------
+  31                                    12 11     7 6      0
+ ┌───────────────────────────────────────┬────────┬────────┐
+ │            imm[31:12]                 │   rd   │ opcode │
+ └───────────────────────────────────────┴────────┴────────┘
+              20 bits                      5 bits   7 bits
+
+Examples: LUI, AUIPC
+
+
+J-Type: Jump Operations
+------------------------
+  31 30          21 20 19          12 11     7 6      0
+ ┌──┬─────────────┬──┬─────────────┬────────┬────────┐
+ │20│   [10:1]    │11│   [19:12]   │   rd   │ opcode │
+ └──┴─────────────┴──┴─────────────┴────────┴────────┘
+  1    10 bits     1     8 bits      5 bits   7 bits
+
+imm[20|10:1|11|19:12] - immediate is sign-extended and multiplied by 2
+
+Examples: JAL
+
+
+RV32C: Compressed Instruction Formats (16-bit)
+===============================================
+
+CR-Type: Compressed Register
+-----------------------------
+  15  12 11     7 6      2 1  0
+ ┌──────┬────────┬────────┬────┐
+ │funct4│ rd/rs1 │  rs2   │ op │
+ └──────┴────────┴────────┴────┘
+  4 bits  5 bits   5 bits  2 bits
+
+Examples: C.ADD, C.MV, C.JR, C.JALR
+
+
+CI-Type: Compressed Immediate
+------------------------------
+  15  13 12 11     7 6      2 1  0
+ ┌──────┬──┬────────┬────────┬────┐
+ │funct3│im│ rd/rs1 │  imm   │ op │
+ └──────┴──┴────────┴────────┴────┘
+  3 bits 1   5 bits   5 bits  2 bits
+
+Examples: C.ADDI, C.LI, C.ADDI16SP, C.LUI, C.LWSP
+
+
+CSS-Type: Compressed Stack-relative Store
+------------------------------------------
+  15  13 12           7 6      2 1  0
+ ┌──────┬──────────────┬────────┬────┐
+ │funct3│     imm      │  rs2   │ op │
+ └──────┴──────────────┴────────┴────┘
+  3 bits    6 bits       5 bits  2 bits
+
+Examples: C.SWSP
+
+
+CIW-Type: Compressed Wide Immediate
+------------------------------------
+  15  13 12           5 4      2 1  0
+ ┌──────┬──────────────┬────────┬────┐
+ │funct3│     imm      │  rd'   │ op │
+ └──────┴──────────────┴────────┴────┘
+  3 bits    8 bits       3 bits  2 bits
+
+Examples: C.ADDI4SPN
+
+
+CL-Type: Compressed Load
+-------------------------
+  15  13 12  10 9     7 6   5 4      2 1  0
+ ┌──────┬─────┬───────┬─────┬────────┬────┐
+ │funct3│ imm │ rs1'  │ imm │  rd'   │ op │
+ └──────┴─────┴───────┴─────┴────────┴────┘
+  3 bits 3 bits 3 bits 2 bits 3 bits  2 bits
+
+Examples: C.LW
+
+
+CS-Type: Compressed Store
+--------------------------
+  15  13 12  10 9     7 6   5 4      2 1  0
+ ┌──────┬─────┬───────┬─────┬────────┬────┐
+ │funct3│ imm │ rs1'  │ imm │  rs2'  │ op │
+ └──────┴─────┴───────┴─────┴────────┴────┘
+  3 bits 3 bits 3 bits 2 bits 3 bits  2 bits
+
+Examples: C.SW
+
+
+CA-Type: Compressed Arithmetic
+-------------------------------
+  15  10 9     7 6  5 4     2 1  0
+ ┌──────┬───────┬────┬───────┬────┐
+ │funct6│ rd'/  │func│  rs2' │ op │
+ │      │ rs1'  │ 2  │       │    │
+ └──────┴───────┴────┴───────┴────┘
+  6 bits 3 bits 2 bits 3 bits 2 bits
+
+Examples: C.SUB, C.XOR, C.OR, C.AND
+
+
+CB-Type: Compressed Branch
+---------------------------
+  15  13 12  10 9     7 6          2 1  0
+ ┌──────┬─────┬───────┬─────────────┬────┐
+ │funct3│ imm │ rs1'  │    imm      │ op │
+ └──────┴─────┴───────┴─────────────┴────┘
+  3 bits 3 bits 3 bits    5 bits     2 bits
+
+Examples: C.BEQZ, C.BNEZ, C.SRLI, C.SRAI, C.ANDI
+
+
+CJ-Type: Compressed Jump
+-------------------------
+  15  13 12                       2 1  0
+ ┌──────┬──────────────────────────┬────┐
+ │funct3│          imm             │ op │
+ └──────┴──────────────────────────┴────┘
+  3 bits        11 bits             2 bits
+
+Examples: C.J, C.JAL
+
+
+Notes:
+------
+- rd', rs1', rs2' are 3-bit register specifiers for x8-x15 (compressed format)
+- Regular 5-bit register specifiers use full x0-x31 range
+- Immediates are sign-extended unless noted otherwise
+- Branch/Jump immediates are multiplied by 2 (always 2-byte aligned)
+- funct3, funct7 are function codes that distinguish instruction variants

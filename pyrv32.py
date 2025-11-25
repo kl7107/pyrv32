@@ -66,33 +66,36 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
     step = 0
     max_steps = 100000  # Safety limit
     
-    while step < max_steps:
-        # Fetch instruction
-        insn = mem.read_word(cpu.pc)
-        
-        # Check for ebreak (0x00100073)
-        if insn == 0x00100073:
+    try:
+        while step < max_steps:
+            # Fetch instruction
+            insn = mem.read_word(cpu.pc)
+            
+            # Decode and display if verbose
             if verbose:
-                print(f"  [{step:6d}] PC=0x{cpu.pc:08x}: EBREAK - Program terminated")
-            else:
-                print(f"\nProgram terminated (ebreak at PC=0x{cpu.pc:08x}, {step} instructions)")
-            break
-        
-        # Decode and display if verbose
+                decoded = decode_instruction(insn)
+                name = get_instruction_name(decoded)
+                print(f"  [{step:6d}] PC=0x{cpu.pc:08x}: {name:6s} (0x{insn:08x})")
+            
+            # Execute
+            continue_exec = execute_instruction(cpu, mem, insn)
+            
+            if not continue_exec:
+                if verbose:
+                    print(f"  Execution stopped at step {step}")
+                break
+            
+            step += 1
+    
+    except EBreakException as e:
         if verbose:
-            decoded = decode_instruction(insn)
-            name = get_instruction_name(decoded)
-            print(f"  [{step:6d}] PC=0x{cpu.pc:08x}: {name:6s} (0x{insn:08x})")
-        
-        # Execute
-        continue_exec = execute_instruction(cpu, mem, insn)
-        
-        if not continue_exec:
-            if verbose:
-                print(f"  Execution stopped at step {step}")
-            break
-        
-        step += 1
+            print(f"  [{step:6d}] PC=0x{e.pc:08x}: EBREAK - Program terminated")
+        else:
+            print(f"\nProgram terminated (ebreak at PC=0x{e.pc:08x}, {step} instructions)")
+    
+    except ECallException as e:
+        print(f"\nECALL encountered at PC=0x{e.pc:08x} - not implemented")
+        sys.exit(1)
     
     if step >= max_steps:
         print(f"\nWarning: Stopped after {max_steps} instructions (safety limit)")
