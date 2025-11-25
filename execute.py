@@ -207,6 +207,27 @@ def exec_mul(rs1_signed, rs2_signed):
     return product & 0xFFFFFFFF
 
 
+def exec_mulh(rs1_signed, rs2_signed):
+    """
+    MULH - Multiply High (upper 32 bits of signed × signed multiplication)
+    
+    Performs signed multiplication of two 32-bit values and returns
+    the upper 32 bits of the 64-bit result.
+    
+    Args:
+        rs1_signed: First operand (signed 32-bit integer)
+        rs2_signed: Second operand (signed 32-bit integer)
+        
+    Returns:
+        Upper 32 bits of the multiplication result (as unsigned 32-bit)
+    """
+    # Perform 64-bit signed multiplication
+    product = rs1_signed * rs2_signed
+    
+    # Return upper 32 bits as unsigned (shift right by 32)
+    return (product >> 32) & 0xFFFFFFFF
+
+
 def exec_register_alu(cpu, decoded):
     """Execute R-type ALU operations (ADD, SUB, AND, OR, XOR, MUL, etc.)"""
     funct3 = decoded['funct3']
@@ -228,9 +249,12 @@ def exec_register_alu(cpu, decoded):
         elif funct7 == 0b0000001:  # MUL - M extension
             result = exec_mul(rs1_signed, rs2_signed)
     
-    elif funct3 == 0b001:  # SLL - Shift Left Logical
-        shamt = rs2_val & 0x1F
-        result = (rs1_val << shamt) & 0xFFFFFFFF
+    elif funct3 == 0b001:
+        if funct7 == 0b0000000:  # SLL - Shift Left Logical
+            shamt = rs2_val & 0x1F
+            result = (rs1_val << shamt) & 0xFFFFFFFF
+        elif funct7 == 0b0000001:  # MULH - M extension
+            result = exec_mulh(rs1_signed, rs2_signed)
     
     elif funct3 == 0b010:  # SLT - Set Less Than (signed)
         result = 1 if rs1_signed < rs2_signed else 0

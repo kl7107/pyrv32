@@ -19,7 +19,7 @@ Following an incremental, test-driven approach:
 | Instruction | Status | Unit Tests | Assembly Test | Notes |
 |-------------|--------|------------|---------------|-------|
 | MUL | ✅ Complete | 13 tests | test_mul.s | Lower 32 bits of signed multiplication |
-| MULH | ⏸️ Pending | - | - | Upper 32 bits (signed × signed) |
+| MULH | ✅ Complete | 13 tests | test_mulh.s | Upper 32 bits (signed × signed) |
 | MULHSU | ⏸️ Pending | - | - | Upper 32 bits (signed × unsigned) |
 | MULHU | ⏸️ Pending | - | - | Upper 32 bits (unsigned × unsigned) |
 | DIV | ⏸️ Pending | - | - | Signed division |
@@ -27,7 +27,7 @@ Following an incremental, test-driven approach:
 | REM | ⏸️ Pending | - | - | Signed remainder |
 | REMU | ⏸️ Pending | - | - | Unsigned remainder |
 
-**Progress: 1/8 (12.5%)**
+**Progress: 2/8 (25%)**
 
 ## MUL Instruction Details
 
@@ -71,22 +71,67 @@ Following an incremental, test-driven approach:
 ✅ Powers of two
 ✅ Large number multiplication
 
+## MULH Instruction Details
+
+### Implementation
+- **File**: `execute.py`
+- **Function**: `exec_mulh(rs1_signed, rs2_signed)`
+- **Integration**: Modified `exec_register_alu()` to handle funct3=001, funct7=0000001
+- **Encoding**: opcode=0110011, funct3=001, funct7=0000001
+
+### Test Coverage (13 tests)
+
+#### Unit Tests (`tests/test_execute_mulh.py`)
+1. **Small Positive × Positive**: 2 × 3, upper bits = 0
+2. **Large Positive × Negative**: 0x7FFFFFFF × -2, upper = 0xFFFFFFFF
+3. **Medium Values**: 100 × 200, upper bits = 0
+4. **Max Positive Squared**: 0x7FFFFFFF × 0x7FFFFFFF, upper = 0x3FFFFFFF
+5. **Max Negative Squared**: 0x80000000 × 0x80000000, upper = 0x40000000
+6. **Negative × Negative**: -1 × -1, upper bits = 0
+7. **Positive × Negative Medium**: 0x10000 × -0x10000, upper = 0xFFFFFFFF
+8. **Large Positive Squared**: 0x40000000 × 0x40000000, upper = 0x10000000
+9. **-1 × Max Positive**: -1 × 0x7FFFFFFF, upper = 0xFFFFFFFF
+10. **Zero**: 0 × 5, upper bits = 0
+11. **Write to x0**: Result discarded
+12. **Same Register**: 0x8000 × 0x8000, upper bits = 0
+13. **One**: 1 × 1, upper bits = 0
+
+#### Assembly Test (`asm_tests/m_ext/test_mulh.s`)
+- Comprehensive self-documenting test
+- 5 verified register results
+- Additional edge cases for manual inspection
+- Tests sign extension and upper bit extraction
+
+### Edge Cases Covered
+✅ Sign extension (positive/negative in upper bits)
+✅ Zero handling
+✅ Maximum positive squared
+✅ Maximum negative squared
+✅ Negative × negative (positive result)
+✅ Positive × negative (negative upper bits)
+✅ x0 write protection
+✅ Same register source
+✅ Small values (no overflow to upper bits)
+✅ Large values requiring upper bits
+
 ## Test Results
 
 All tests passing:
-- **Unit Tests**: 50 tests (including 13 MUL tests)
-- **Assembly Tests**: 4 tests (including test_mul.s)
-- **Total**: 54 tests ✅
+- **Unit Tests**: 63 tests (including 13 MUL + 13 MULH tests)
+- **Assembly Tests**: 5 tests (including test_mul.s + test_mulh.s)
+- **Total**: 67 tests ✅
 
 ## Files Modified
 
 ### New Files
 - `tests/test_execute_mul.py` - MUL unit tests
+- `tests/test_execute_mulh.py` - MULH unit tests
 - `asm_tests/m_ext/test_mul.s` - MUL assembly test
+- `asm_tests/m_ext/test_mulh.s` - MULH assembly test
 
 ### Modified Files
-- `execute.py` - Added exec_mul() and M extension integration
-- `pyrv32.py` - Integrated MUL tests into test runner
+- `execute.py` - Added exec_mul(), exec_mulh(), and M extension integration
+- `pyrv32.py` - Integrated MUL and MULH tests into test runner
 - `README.md` - Updated instruction list and test count
 - `TESTING.md` - Updated test counts and coverage
 - `.gitignore` - Added assembly build artifacts
@@ -96,13 +141,12 @@ All tests passing:
 
 ## Next Steps
 
-1. **MULH** - Upper 32 bits of signed × signed multiplication
+1. **MULHSU** - Upper 32 bits of signed × unsigned multiplication
 2. **MULHU** - Upper 32 bits of unsigned × unsigned multiplication
-3. **MULHSU** - Upper 32 bits of signed × unsigned multiplication
-4. **DIV** - Signed division with proper handling of edge cases
-5. **DIVU** - Unsigned division
-6. **REM** - Signed remainder
-7. **REMU** - Unsigned remainder
+3. **DIV** - Signed division with proper handling of edge cases
+4. **DIVU** - Unsigned division
+5. **REM** - Signed remainder
+6. **REMU** - Unsigned remainder
 
 Each instruction will follow the same test-driven approach as MUL.
 
