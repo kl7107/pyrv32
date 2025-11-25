@@ -28,22 +28,24 @@ All test output is logged to temporary files:
 
 ## Current Test Status
 
-**Total: 67 tests passing** ✅
+**Total: 80 tests passing** ✅
 
-### Unit Tests: 63 tests
+### Unit Tests: 76 tests
 - **CPU tests**: 9 tests (100% coverage)
 - **Memory tests**: 15 tests (100% coverage)
 - **Decoder utilities**: 9 tests (100% coverage)
 - **Execute tests**: 4 tests (~15% coverage - RV32I only)
 - **MUL tests**: 13 tests (100% coverage - M extension)
 - **MULH tests**: 13 tests (100% coverage - M extension)
+- **MULHSU tests**: 13 tests (100% coverage - M extension)
 
-### Assembly Tests: 5 tests
+### Assembly Tests: 6 tests
 - **hello_world**: UART output test
 - **lui_instruction**: LUI instruction test
 - **addi_instruction**: ADDI instruction test
 - **mul_instruction**: MUL instruction test (M extension)
 - **mulh_instruction**: MULH instruction test (M extension)
+- **mulhsu_instruction**: MULHSU instruction test (M extension)
 
 ## Unit Test Coverage
 
@@ -134,6 +136,24 @@ All test output is logged to temporary files:
 
 **M Extension Progress**: 2/8 instructions implemented (MUL, MULH complete)
 
+### MULHSU Instruction (`test_execute_mulhsu.py` - 13 tests)
+
+1. **Small Positive**: 2 × 3, upper bits = 0
+2. **Medium Values**: 100 × 200, upper bits = 0
+3. **Negative × Max Unsigned**: -1 × 0xFFFFFFFF, upper = 0xFFFFFFFF
+4. **Max Positive × Max Unsigned**: 0x7FFFFFFF × 0xFFFFFFFF, upper = 0x7FFFFFFE
+5. **Min Negative × Max Unsigned**: 0x80000000 × 0xFFFFFFFF, upper = 0x80000000
+6. **Positive × Large Unsigned**: 0x40000000 × 0x80000000, upper = 0x20000000
+7. **Negative Two**: -2 × 0x7FFFFFFF, upper = 0xFFFFFFFF
+8. **One × Max Unsigned**: 1 × 0xFFFFFFFF, upper = 0
+9. **Negative 0x10000**: -0x10000 × 0x10000, upper = 0xFFFFFFFF
+10. **Zero**: 0 × 5, upper bits = 0
+11. **Write to x0**: Result discarded
+12. **Same Register**: -100 × 0xFFFFFF9C, upper = 0xFFFFFF9C
+13. **-1 × 1**: Upper = 0xFFFFFFFF
+
+**M Extension Progress**: 3/8 instructions implemented (MUL, MULH, MULHSU complete)
+
 ## Test Organization
 
 ```
@@ -156,7 +176,8 @@ pyrv32/
     │   └── test_addi.s
     └── m_ext/                 # M extension tests
         ├── test_mul.s
-        └── test_mulh.s
+        ├── test_mulh.s
+        └── test_mulhsu.s
 ```
 
 ## Running Tests
@@ -167,7 +188,7 @@ pyrv32/
 python3 pyrv32.py
 ```
 
-This runs all 63 unit tests, then the demo program.
+This runs all 76 unit tests, then the demo program.
 
 ### Individual Unit Test Modules
 
@@ -178,6 +199,7 @@ python3 tests/test_decoder_utils.py
 python3 tests/test_execute.py
 python3 tests/test_execute_mul.py
 python3 tests/test_execute_mulh.py
+python3 tests/test_execute_mulhsu.py
 ```
 
 ### Assembly Tests
@@ -218,10 +240,10 @@ On failure:
 | decoder.py (utils) | 1 | 9 | 100% | ✅ Complete |
 | decoder.py (main) | 2 | 0 | 0% | ⏸️ Phase 2 |
 | execute.py (RV32I) | ~40 insns | 4 | ~15% | ⏸️ Phases 2-6 |
-| execute.py (M ext) | 8 insns | 26 | 25% | 🔄 In Progress |
+| execute.py (M ext) | 8 insns | 39 | 37.5% | 🔄 In Progress |
 
 **Foundation complete**: Core utilities are bulletproof ✅
-**M Extension**: MUL, MULH implemented (2/8 instructions) 🔄
+**M Extension**: MUL, MULH, MULHSU implemented (3/8 instructions) 🔄
 
 ## Future Testing Plans
 

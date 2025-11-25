@@ -65,15 +65,16 @@ pyrv32/
 ├── uart.py             # UART transmitter module
 ├── decoder.py          # Instruction decoder
 ├── execute.py          # Instruction execution engine
-├── tests/              # Unit tests (63 tests)
+├── tests/              # Unit tests (76 tests)
 │   ├── __init__.py
 │   ├── test_cpu.py         # CPU tests (9)
 │   ├── test_memory.py      # Memory/UART tests (15)
 │   ├── test_decoder_utils.py # Decoder utilities (9)
 │   ├── test_execute.py     # Execution tests - RV32I (4)
 │   ├── test_execute_mul.py # MUL instruction tests - M ext (13)
-│   └── test_execute_mulh.py # MULH instruction tests - M ext (13)
-└── asm_tests/          # Assembly test framework (5 tests)
+│   ├── test_execute_mulh.py # MULH instruction tests - M ext (13)
+│   └── test_execute_mulhsu.py # MULHSU instruction tests - M ext (13)
+└── asm_tests/          # Assembly test framework (6 tests)
     ├── README.md       # Framework documentation
     ├── Makefile        # Build using riscv64-unknown-elf toolchain
     ├── run_tests.py    # Test runner with auto-verification
@@ -83,7 +84,8 @@ pyrv32/
     │   └── test_addi.s
     └── m_ext/          # M extension tests
         ├── test_mul.s
-        └── test_mulh.s
+        ├── test_mulh.s
+        └── test_mulhsu.s
 ```
 
 ## Features Implemented
@@ -122,14 +124,14 @@ pyrv32/
 #### M Extension (Multiply/Divide) - In Progress
 - **MUL** ✅ - Multiply (lower 32 bits)
 - **MULH** ✅ - Multiply High (signed × signed, upper 32 bits)
-- **MULHSU** - Multiply High (signed × unsigned, upper 32 bits)
+- **MULHSU** ✅ - Multiply High (signed × unsigned, upper 32 bits)
 - **MULHU** - Multiply High (unsigned × unsigned, upper 32 bits)
 - **DIV** - Divide (signed)
 - **DIVU** - Divide Unsigned
 - **REM** - Remainder (signed)
 - **REMU** - Remainder Unsigned
 
-**M Extension Progress**: 2/8 instructions (25%)
+**M Extension Progress**: 3/8 instructions (37.5%)
 
 ## Quick Start
 
@@ -139,11 +141,11 @@ python3 pyrv32.py
 ```
 
 This will:
-1. Run all 63 unit tests (CPU, memory, decoder utilities, execution, MUL, MULH)
+1. Run all 76 unit tests (CPU, memory, decoder utilities, execution, MUL, MULH, MULHSU)
 2. Run demo program that outputs "Hello\n" to UART
 3. Display results and register state
 
-**All 67 tests passing** ✅ (63 unit + 5 assembly)
+**All 80 tests passing** ✅ (76 unit + 6 assembly)
 
 ### Assembly Tests
 

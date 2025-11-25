@@ -228,6 +228,29 @@ def exec_mulh(rs1_signed, rs2_signed):
     return (product >> 32) & 0xFFFFFFFF
 
 
+def exec_mulhsu(rs1_signed, rs2_val):
+    """
+    MULHSU - Multiply High Signed-Unsigned (upper 32 bits of signed × unsigned)
+    
+    Performs multiplication of a signed 32-bit value with an unsigned 32-bit value
+    and returns the upper 32 bits of the 64-bit result.
+    
+    Args:
+        rs1_signed: First operand (signed 32-bit integer)
+        rs2_val: Second operand (unsigned 32-bit integer)
+        
+    Returns:
+        Upper 32 bits of the multiplication result (as unsigned 32-bit)
+    """
+    # rs2_val is already unsigned (0 to 0xFFFFFFFF)
+    # rs1_signed is signed (-0x80000000 to 0x7FFFFFFF)
+    # Python handles the mixed sign multiplication correctly
+    product = rs1_signed * rs2_val
+    
+    # Return upper 32 bits as unsigned
+    return (product >> 32) & 0xFFFFFFFF
+
+
 def exec_register_alu(cpu, decoded):
     """Execute R-type ALU operations (ADD, SUB, AND, OR, XOR, MUL, etc.)"""
     funct3 = decoded['funct3']
@@ -256,8 +279,11 @@ def exec_register_alu(cpu, decoded):
         elif funct7 == 0b0000001:  # MULH - M extension
             result = exec_mulh(rs1_signed, rs2_signed)
     
-    elif funct3 == 0b010:  # SLT - Set Less Than (signed)
-        result = 1 if rs1_signed < rs2_signed else 0
+    elif funct3 == 0b010:
+        if funct7 == 0b0000000:  # SLT - Set Less Than (signed)
+            result = 1 if rs1_signed < rs2_signed else 0
+        elif funct7 == 0b0000001:  # MULHSU - M extension
+            result = exec_mulhsu(rs1_signed, rs2_val)
     
     elif funct3 == 0b011:  # SLTU - Set Less Than Unsigned
         result = 1 if rs1_val < rs2_val else 0
