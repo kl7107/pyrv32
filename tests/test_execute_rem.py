@@ -1,134 +1,240 @@
 #!/usr/bin/env python3
-
 """
-Unit tests for REM (Remainder Signed) instruction.
-Tests signed remainder with RISC-V semantics.
+Unit tests for REM instruction (M extension).
+
+REM performs signed remainder operation with RISC-V semantics.
+Format: REM rd, rs1, rs2
+Encoding: opcode=0110011, funct3=110, funct7=0000001
 """
 
 import sys
-sys.path.insert(0, '..')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-def test_rem_normal():
-    """Test REM with normal division (no remainder)"""
-    # 10 % 2 = 0
-    from execute import exec_rem
-    result = exec_rem(10, 2)
-    assert result == 0, f"Expected 0, got {result}"
-    print("✓ test_rem_normal")
+from cpu import RV32CPU
+from memory import Memory
+from execute import execute_instruction
 
-def test_rem_with_remainder():
-    """Test REM with remainder"""
-    # 10 % 3 = 1
-    from execute import exec_rem
-    result = exec_rem(10, 3)
-    assert result == 1, f"Expected 1, got {result}"
-    print("✓ test_rem_with_remainder")
 
-def test_rem_by_zero():
-    """Test REM by zero returns dividend"""
-    # 100 % 0 = 100 (per RISC-V spec)
-    from execute import exec_rem
-    result = exec_rem(100, 0)
-    assert result == 100, f"Expected 100, got {result}"
-    print("✓ test_rem_by_zero")
+def test_rem_normal(runner):
+    """Test REM with normal division: 10 % 2 = 0"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 10
+    cpu.regs[6] = 2
+    
+    # REM x10, x5, x6
+    insn = 0b0000001_00110_00101_110_01010_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[10] != 0:
+        runner.test_fail("REM normal", "0", f"{cpu.regs[10]}")
 
-def test_rem_overflow():
-    """Test REM overflow case: 0x80000000 % -1"""
-    # 0x80000000 % -1 = 0 (per RISC-V spec)
-    from execute import exec_rem
-    result = exec_rem(-2147483648, -1)
-    assert result == 0, f"Expected 0, got {result}"
-    print("✓ test_rem_overflow")
 
-def test_rem_zero_dividend():
-    """Test REM with zero dividend"""
-    # 0 % 5 = 0
-    from execute import exec_rem
-    result = exec_rem(0, 5)
-    assert result == 0, f"Expected 0, got {result}"
-    print("✓ test_rem_zero_dividend")
+def test_rem_with_remainder(runner):
+    """Test REM with remainder: 10 % 3 = 1"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 10
+    cpu.regs[6] = 3
+    
+    # REM x11, x5, x6
+    insn = 0b0000001_00110_00101_110_01011_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[11] != 1:
+        runner.test_fail("REM with remainder", "1", f"{cpu.regs[11]}")
 
-def test_rem_negative_dividend_positive_divisor():
-    """Test REM with negative dividend, positive divisor"""
-    # -10 % 3 = -1 (sign follows dividend)
-    from execute import exec_rem
-    result = exec_rem(-10, 3)
-    assert result == 0xFFFFFFFF, f"Expected 0xFFFFFFFF (-1), got {result:#010x}"
-    print("✓ test_rem_negative_dividend_positive_divisor")
 
-def test_rem_positive_dividend_negative_divisor():
-    """Test REM with positive dividend, negative divisor"""
-    # 10 % -3 = 1 (sign follows dividend)
-    from execute import exec_rem
-    result = exec_rem(10, -3)
-    assert result == 1, f"Expected 1, got {result}"
-    print("✓ test_rem_positive_dividend_negative_divisor")
+def test_rem_by_zero(runner):
+    """Test REM by zero returns dividend (RISC-V spec)"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 100
+    cpu.regs[6] = 0
+    
+    # REM x12, x5, x6
+    insn = 0b0000001_00110_00101_110_01100_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[12] != 100:
+        runner.test_fail("REM by zero", "100", f"{cpu.regs[12]}")
 
-def test_rem_negative_negative():
-    """Test REM with both operands negative"""
-    # -10 % -3 = -1 (sign follows dividend)
-    from execute import exec_rem
-    result = exec_rem(-10, -3)
-    assert result == 0xFFFFFFFF, f"Expected 0xFFFFFFFF (-1), got {result:#010x}"
-    print("✓ test_rem_negative_negative")
 
-def test_rem_7_mod_2():
-    """Test REM with 7 % 2"""
-    # 7 % 2 = 1
-    from execute import exec_rem
-    result = exec_rem(7, 2)
-    assert result == 1, f"Expected 1, got {result}"
-    print("✓ test_rem_7_mod_2")
+def test_rem_overflow(runner):
+    """Test REM overflow: 0x80000000 % -1 = 0 (RISC-V spec)"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 0x80000000
+    cpu.regs[6] = 0xFFFFFFFF
+    
+    # REM x13, x5, x6
+    insn = 0b0000001_00110_00101_110_01101_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[13] != 0:
+        runner.test_fail("REM overflow", "0", f"{cpu.regs[13]}")
 
-def test_rem_negative_7_mod_2():
-    """Test REM with -7 % 2"""
-    # -7 % 2 = -1 (sign follows dividend)
-    from execute import exec_rem
-    result = exec_rem(-7, 2)
-    assert result == 0xFFFFFFFF, f"Expected 0xFFFFFFFF (-1), got {result:#010x}"
-    print("✓ test_rem_negative_7_mod_2")
 
-def test_rem_large_numbers():
-    """Test REM with large numbers"""
-    # 1000000 % 7 = 1
-    from execute import exec_rem
-    result = exec_rem(1000000, 7)
-    assert result == 1, f"Expected 1, got {result}"
-    print("✓ test_rem_large_numbers")
+def test_rem_zero_dividend(runner):
+    """Test REM with zero dividend: 0 % 5 = 0"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 0
+    cpu.regs[6] = 5
+    
+    # REM x14, x5, x6
+    insn = 0b0000001_00110_00101_110_01110_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[14] != 0:
+        runner.test_fail("REM zero dividend", "0", f"{cpu.regs[14]}")
 
-def test_rem_max_positive():
-    """Test REM with max positive"""
-    # 0x7FFFFFFF % 2 = 1
-    from execute import exec_rem
-    result = exec_rem(0x7FFFFFFF, 2)
-    assert result == 1, f"Expected 1, got {result}"
-    print("✓ test_rem_max_positive")
 
-def test_rem_max_negative():
-    """Test REM with max negative (not overflow)"""
-    # 0x80000000 % 2 = 0
-    from execute import exec_rem
-    result = exec_rem(-2147483648, 2)
-    assert result == 0, f"Expected 0, got {result}"
-    print("✓ test_rem_max_negative")
+def test_rem_negative_dividend_positive_divisor(runner):
+    """Test REM: -10 % 3 = -1 (sign follows dividend)"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = (-10 & 0xFFFFFFFF)
+    cpu.regs[6] = 3
+    
+    # REM x15, x5, x6
+    insn = 0b0000001_00110_00101_110_01111_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    expected = 0xFFFFFFFF
+    if cpu.regs[15] != expected:
+        runner.test_fail("REM -10 % 3", f"0x{expected:08X}", f"0x{cpu.regs[15]:08X}")
 
-def main():
-    """Run all REM tests"""
-    print("Running REM instruction tests...")
-    test_rem_normal()
-    test_rem_with_remainder()
-    test_rem_by_zero()
-    test_rem_overflow()
-    test_rem_zero_dividend()
-    test_rem_negative_dividend_positive_divisor()
-    test_rem_positive_dividend_negative_divisor()
-    test_rem_negative_negative()
-    test_rem_7_mod_2()
-    test_rem_negative_7_mod_2()
-    test_rem_large_numbers()
-    test_rem_max_positive()
-    test_rem_max_negative()
-    print("✓ All REM tests passed (13/13)")
 
-if __name__ == "__main__":
-    main()
+def test_rem_positive_dividend_negative_divisor(runner):
+    """Test REM: 10 % -3 = 1 (sign follows dividend)"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 10
+    cpu.regs[6] = (-3 & 0xFFFFFFFF)
+    
+    # REM x16, x5, x6
+    insn = 0b0000001_00110_00101_110_10000_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[16] != 1:
+        runner.test_fail("REM 10 % -3", "1", f"{cpu.regs[16]}")
+
+
+def test_rem_negative_negative(runner):
+    """Test REM: -10 % -3 = -1 (sign follows dividend)"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = (-10 & 0xFFFFFFFF)
+    cpu.regs[6] = (-3 & 0xFFFFFFFF)
+    
+    # REM x17, x5, x6
+    insn = 0b0000001_00110_00101_110_10001_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    expected = 0xFFFFFFFF
+    if cpu.regs[17] != expected:
+        runner.test_fail("REM -10 % -3", f"0x{expected:08X}", f"0x{cpu.regs[17]:08X}")
+
+
+def test_rem_7_mod_2(runner):
+    """Test REM: 7 % 2 = 1"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 7
+    cpu.regs[6] = 2
+    
+    # REM x18, x5, x6
+    insn = 0b0000001_00110_00101_110_10010_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[18] != 1:
+        runner.test_fail("REM 7 % 2", "1", f"{cpu.regs[18]}")
+
+
+def test_rem_negative_7_mod_2(runner):
+    """Test REM: -7 % 2 = -1 (sign follows dividend)"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = (-7 & 0xFFFFFFFF)
+    cpu.regs[6] = 2
+    
+    # REM x19, x5, x6
+    insn = 0b0000001_00110_00101_110_10011_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    expected = 0xFFFFFFFF
+    if cpu.regs[19] != expected:
+        runner.test_fail("REM -7 % 2", f"0x{expected:08X}", f"0x{cpu.regs[19]:08X}")
+
+
+def test_rem_large_numbers(runner):
+    """Test REM with large numbers: 1000000 % 7 = 1"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 1000000
+    cpu.regs[6] = 7
+    
+    # REM x20, x5, x6
+    insn = 0b0000001_00110_00101_110_10100_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[20] != 1:
+        runner.test_fail("REM large numbers", "1", f"{cpu.regs[20]}")
+
+
+def test_rem_max_positive(runner):
+    """Test REM with max positive: 0x7FFFFFFF % 2 = 1"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 0x7FFFFFFF
+    cpu.regs[6] = 2
+    
+    # REM x21, x5, x6
+    insn = 0b0000001_00110_00101_110_10101_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[21] != 1:
+        runner.test_fail("REM max positive", "1", f"{cpu.regs[21]}")
+
+
+def test_rem_max_negative(runner):
+    """Test REM with max negative: 0x80000000 % 2 = 0"""
+    cpu = RV32CPU()
+    mem = Memory()
+    
+    cpu.regs[5] = 0x80000000
+    cpu.regs[6] = 2
+    
+    # REM x22, x5, x6
+    insn = 0b0000001_00110_00101_110_10110_0110011
+    
+    execute_instruction(cpu, mem, insn)
+    
+    if cpu.regs[22] != 0:
+        runner.test_fail("REM max negative", "0", f"{cpu.regs[22]}")

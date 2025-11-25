@@ -15,7 +15,7 @@ from cpu import RV32CPU
 from memory import Memory
 from execute import execute_instruction
 
-def test_mul_positive_positive():
+def test_mul_positive_positive(runner):
     """Test MUL with two positive numbers: 2 × 3 = 6"""
     cpu = RV32CPU()
     mem = Memory()
@@ -31,11 +31,12 @@ def test_mul_positive_positive():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[10] == 6, f"Expected x10=6, got {cpu.regs[10]}"
-    assert cpu.pc == 4, f"Expected PC=4, got {cpu.pc}"
-    print("✓ test_mul_positive_positive passed")
+    if cpu.regs[10] != 6:
+        runner.test_fail("MUL positive×positive result", "6", f"{cpu.regs[10]}")
+    if cpu.pc != 4:
+        runner.test_fail("MUL PC increment", "4", f"{cpu.pc}")
 
-def test_mul_positive_negative():
+def test_mul_positive_negative(runner):
     """Test MUL with positive × negative: 2 × -3 = -6"""
     cpu = RV32CPU()
     mem = Memory()
@@ -49,10 +50,10 @@ def test_mul_positive_negative():
     execute_instruction(cpu, mem, insn)
     
     expected = (-6 & 0xFFFFFFFF)  # 0xFFFFFFFA
-    assert cpu.regs[11] == expected, f"Expected x11=0x{expected:08X}, got 0x{cpu.regs[11]:08X}"
-    print("✓ test_mul_positive_negative passed")
+    if cpu.regs[11] != expected:
+        runner.test_fail("MUL positive×negative", f"0x{expected:08X}", f"0x{cpu.regs[11]:08X}")
 
-def test_mul_zero():
+def test_mul_zero(runner):
     """Test MUL with zero: 0 × 5 = 0"""
     cpu = RV32CPU()
     mem = Memory()
@@ -65,10 +66,10 @@ def test_mul_zero():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[12] == 0, f"Expected x12=0, got {cpu.regs[12]}"
-    print("✓ test_mul_zero passed")
+    if cpu.regs[12] != 0:
+        runner.test_fail("MUL with zero", "0", f"{cpu.regs[12]}")
 
-def test_mul_one():
+def test_mul_one(runner):
     """Test MUL with one: 1 × 1 = 1"""
     cpu = RV32CPU()
     mem = Memory()
@@ -81,10 +82,10 @@ def test_mul_one():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[13] == 1, f"Expected x13=1, got {cpu.regs[13]}"
-    print("✓ test_mul_one passed")
+    if cpu.regs[13] != 1:
+        runner.test_fail("MUL with one", "1", f"{cpu.regs[13]}")
 
-def test_mul_negative_positive():
+def test_mul_negative_positive(runner):
     """Test MUL with negative × positive: -2 × 1 = -2"""
     cpu = RV32CPU()
     mem = Memory()
@@ -98,10 +99,10 @@ def test_mul_negative_positive():
     execute_instruction(cpu, mem, insn)
     
     expected = (-2 & 0xFFFFFFFF)  # 0xFFFFFFFE
-    assert cpu.regs[14] == expected, f"Expected x14=0x{expected:08X}, got 0x{cpu.regs[14]:08X}"
-    print("✓ test_mul_negative_positive passed")
+    if cpu.regs[14] != expected:
+        runner.test_fail("MUL negative×positive", f"0x{expected:08X}", f"0x{cpu.regs[14]:08X}")
 
-def test_mul_negative_negative():
+def test_mul_negative_negative(runner):
     """Test MUL with negative × negative: -1 × -1 = 1"""
     cpu = RV32CPU()
     mem = Memory()
@@ -114,10 +115,10 @@ def test_mul_negative_negative():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[15] == 1, f"Expected x15=1, got {cpu.regs[15]}"
-    print("✓ test_mul_negative_negative passed")
+    if cpu.regs[15] != 1:
+        runner.test_fail("MUL negative×negative", "1", f"{cpu.regs[15]}")
 
-def test_mul_max_positive():
+def test_mul_max_positive(runner):
     """Test MUL with max positive: 0x7FFFFFFF × 1 = 0x7FFFFFFF"""
     cpu = RV32CPU()
     mem = Memory()
@@ -130,10 +131,10 @@ def test_mul_max_positive():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[16] == 0x7FFFFFFF, f"Expected x16=0x7FFFFFFF, got 0x{cpu.regs[16]:08X}"
-    print("✓ test_mul_max_positive passed")
+    if cpu.regs[16] != 0x7FFFFFFF:
+        runner.test_fail("MUL max positive", "0x7FFFFFFF", f"0x{cpu.regs[16]:08X}")
 
-def test_mul_max_negative():
+def test_mul_max_negative(runner):
     """Test MUL with max negative: 0x80000000 × 1 = 0x80000000"""
     cpu = RV32CPU()
     mem = Memory()
@@ -146,10 +147,10 @@ def test_mul_max_negative():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[17] == 0x80000000, f"Expected x17=0x80000000, got 0x{cpu.regs[17]:08X}"
-    print("✓ test_mul_max_negative passed")
+    if cpu.regs[17] != 0x80000000:
+        runner.test_fail("MUL max negative", "0x80000000", f"0x{cpu.regs[17]:08X}")
 
-def test_mul_overflow():
+def test_mul_overflow(runner):
     """Test MUL overflow: 0x10000 × 0x10000 = 0x100000000, lower 32 bits = 0"""
     cpu = RV32CPU()
     mem = Memory()
@@ -163,10 +164,10 @@ def test_mul_overflow():
     execute_instruction(cpu, mem, insn)
     
     # Result is 0x100000000, lower 32 bits = 0
-    assert cpu.regs[18] == 0, f"Expected x18=0 (overflow), got 0x{cpu.regs[18]:08X}"
-    print("✓ test_mul_overflow passed")
+    if cpu.regs[18] != 0:
+        runner.test_fail("MUL overflow", "0", f"0x{cpu.regs[18]:08X}")
 
-def test_mul_large_numbers():
+def test_mul_large_numbers(runner):
     """Test MUL with large numbers: 0xFFFF × 0x10001"""
     cpu = RV32CPU()
     mem = Memory()
@@ -181,10 +182,10 @@ def test_mul_large_numbers():
     
     # 65535 × 65537 = (65536-1) × (65536+1) = 65536² - 1 = 4294967295 = 0xFFFFFFFF
     expected = 0xFFFFFFFF
-    assert cpu.regs[19] == expected, f"Expected x19=0x{expected:08X}, got 0x{cpu.regs[19]:08X}"
-    print("✓ test_mul_large_numbers passed")
+    if cpu.regs[19] != expected:
+        runner.test_fail("MUL large numbers", f"0x{expected:08X}", f"0x{cpu.regs[19]:08X}")
 
-def test_mul_powers_of_two():
+def test_mul_powers_of_two(runner):
     """Test MUL with powers of two: 8 × 16 = 128"""
     cpu = RV32CPU()
     mem = Memory()
@@ -197,10 +198,10 @@ def test_mul_powers_of_two():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[20] == 128, f"Expected x20=128, got {cpu.regs[20]}"
-    print("✓ test_mul_powers_of_two passed")
+    if cpu.regs[20] != 128:
+        runner.test_fail("MUL powers of two", "128", f"{cpu.regs[20]}")
 
-def test_mul_rd_x0():
+def test_mul_rd_x0(runner):
     """Test MUL writing to x0 (should remain 0)"""
     cpu = RV32CPU()
     mem = Memory()
@@ -213,10 +214,10 @@ def test_mul_rd_x0():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[0] == 0, f"Expected x0=0, got {cpu.regs[0]}"
-    print("✓ test_mul_rd_x0 passed")
+    if cpu.regs[0] != 0:
+        runner.test_fail("MUL to x0", "0", f"{cpu.regs[0]}")
 
-def test_mul_same_register():
+def test_mul_same_register(runner):
     """Test MUL with same source registers: x5 × x5"""
     cpu = RV32CPU()
     mem = Memory()
@@ -228,28 +229,6 @@ def test_mul_same_register():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[21] == 49, f"Expected x21=49, got {cpu.regs[21]}"
-    print("✓ test_mul_same_register passed")
-
-def main():
-    """Run all MUL instruction tests."""
-    # Run all tests
-    test_mul_positive_positive()
-    test_mul_positive_negative()
-    test_mul_zero()
-    test_mul_one()
-    test_mul_negative_positive()
-    test_mul_negative_negative()
-    test_mul_max_positive()
-    test_mul_max_negative()
-    test_mul_overflow()
-    test_mul_large_numbers()
-    test_mul_powers_of_two()
-    test_mul_rd_x0()
-    test_mul_same_register()
-    
-    print("\n✓ All MUL tests passed (13/13)")
-
-if __name__ == '__main__':
-    main()
+    if cpu.regs[21] != 49:
+        runner.test_fail("MUL same register", "49", f"{cpu.regs[21]}")
 

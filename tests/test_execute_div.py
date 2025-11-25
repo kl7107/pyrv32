@@ -8,127 +8,119 @@ Tests signed division with special RISC-V semantics.
 import sys
 sys.path.insert(0, '..')
 
-def test_div_normal():
+
+def test_div_normal(runner):
     """Test DIV with normal positive division"""
     # 10 / 2 = 5
     from execute import exec_div
     result = exec_div(10, 2)
-    assert result == 5, f"Expected 5, got {result}"
-    print("✓ test_div_normal")
+    if result != 5:
+        runner.test_fail("DIV normal", "5", f"{result}")
 
-def test_div_negative_result():
+
+def test_div_negative_result(runner):
     """Test DIV with positive / negative"""
     # 10 / -2 = -5
     from execute import exec_div
     result = exec_div(10, -2)
-    assert result == 0xFFFFFFFB, f"Expected 0xFFFFFFFB (-5), got {result:#010x}"
-    print("✓ test_div_negative_result")
+    if result != 0xFFFFFFFB:
+        runner.test_fail("DIV positive/negative", "0xFFFFFFFB (-5)", f"{result:#010x}")
 
-def test_div_by_zero():
+
+def test_div_by_zero(runner):
     """Test DIV by zero returns -1"""
     # 100 / 0 = -1 (per RISC-V spec)
     from execute import exec_div
     result = exec_div(100, 0)
-    assert result == 0xFFFFFFFF, f"Expected 0xFFFFFFFF (-1), got {result:#010x}"
-    print("✓ test_div_by_zero")
+    if result != 0xFFFFFFFF:
+        runner.test_fail("DIV by zero", "0xFFFFFFFF (-1)", f"{result:#010x}")
 
-def test_div_overflow():
+
+def test_div_overflow(runner):
     """Test DIV overflow case: 0x80000000 / -1"""
     # 0x80000000 / -1 = 0x80000000 (per RISC-V spec)
     from execute import exec_div
     result = exec_div(-2147483648, -1)
-    assert result == 0x80000000, f"Expected 0x80000000, got {result:#010x}"
-    print("✓ test_div_overflow")
+    if result != 0x80000000:
+        runner.test_fail("DIV overflow", "0x80000000", f"{result:#010x}")
 
-def test_div_zero_dividend():
+
+def test_div_zero_dividend(runner):
     """Test DIV with zero dividend"""
     # 0 / 5 = 0
     from execute import exec_div
     result = exec_div(0, 5)
-    assert result == 0, f"Expected 0, got {result:#010x}"
-    print("✓ test_div_zero_dividend")
+    if result != 0:
+        runner.test_fail("DIV zero dividend", "0", f"{result:#010x}")
 
-def test_div_negative_negative():
+
+def test_div_negative_negative(runner):
     """Test DIV with both operands negative"""
     # -10 / -2 = 5
     from execute import exec_div
     result = exec_div(-10, -2)
-    assert result == 5, f"Expected 5, got {result}"
-    print("✓ test_div_negative_negative")
+    if result != 5:
+        runner.test_fail("DIV negative/negative", "5", f"{result}")
 
-def test_div_truncate_positive():
+
+def test_div_truncate_positive(runner):
     """Test DIV truncates towards zero (positive)"""
     # 7 / 2 = 3 (not 4)
     from execute import exec_div
     result = exec_div(7, 2)
-    assert result == 3, f"Expected 3, got {result}"
-    print("✓ test_div_truncate_positive")
+    if result != 3:
+        runner.test_fail("DIV truncate positive", "3", f"{result}")
 
-def test_div_truncate_negative():
+
+def test_div_truncate_negative(runner):
     """Test DIV truncates towards zero (negative)"""
     # -7 / 2 = -3 (not -4)
     from execute import exec_div
     result = exec_div(-7, 2)
-    assert result == 0xFFFFFFFD, f"Expected 0xFFFFFFFD (-3), got {result:#010x}"
-    print("✓ test_div_truncate_negative")
+    if result != 0xFFFFFFFD:
+        runner.test_fail("DIV truncate negative", "0xFFFFFFFD (-3)", f"{result:#010x}")
 
-def test_div_by_one():
+
+def test_div_by_one(runner):
     """Test DIV by 1"""
     # 12345 / 1 = 12345
     from execute import exec_div
     result = exec_div(12345, 1)
-    assert result == 12345, f"Expected 12345, got {result}"
-    print("✓ test_div_by_one")
+    if result != 12345:
+        runner.test_fail("DIV by 1", "12345", f"{result}")
 
-def test_div_by_minus_one():
+
+def test_div_by_minus_one(runner):
     """Test DIV by -1 (normal case, not overflow)"""
     # 100 / -1 = -100
     from execute import exec_div
     result = exec_div(100, -1)
-    assert result == 0xFFFFFF9C, f"Expected 0xFFFFFF9C (-100), got {result:#010x}"
-    print("✓ test_div_by_minus_one")
+    if result != 0xFFFFFF9C:
+        runner.test_fail("DIV by -1", "0xFFFFFF9C (-100)", f"{result:#010x}")
 
-def test_div_large_numbers():
+
+def test_div_large_numbers(runner):
     """Test DIV with large numbers"""
     # 1000000 / 3 = 333333
     from execute import exec_div
     result = exec_div(1000000, 3)
-    assert result == 333333, f"Expected 333333, got {result}"
-    print("✓ test_div_large_numbers")
+    if result != 333333:
+        runner.test_fail("DIV large numbers", "333333", f"{result}")
 
-def test_div_max_positive():
+
+def test_div_max_positive(runner):
     """Test DIV with max positive"""
     # 0x7FFFFFFF / 2 = 0x3FFFFFFF
     from execute import exec_div
     result = exec_div(0x7FFFFFFF, 2)
-    assert result == 0x3FFFFFFF, f"Expected 0x3FFFFFFF, got {result:#010x}"
-    print("✓ test_div_max_positive")
+    if result != 0x3FFFFFFF:
+        runner.test_fail("DIV max positive", "0x3FFFFFFF", f"{result:#010x}")
 
-def test_div_max_negative():
+
+def test_div_max_negative(runner):
     """Test DIV with max negative (not overflow)"""
     # 0x80000000 / 2 = 0xC0000000
     from execute import exec_div
     result = exec_div(-2147483648, 2)
-    assert result == 0xC0000000, f"Expected 0xC0000000, got {result:#010x}"
-    print("✓ test_div_max_negative")
-
-def main():
-    """Run all DIV tests"""
-    print("Running DIV instruction tests...")
-    test_div_normal()
-    test_div_negative_result()
-    test_div_by_zero()
-    test_div_overflow()
-    test_div_zero_dividend()
-    test_div_negative_negative()
-    test_div_truncate_positive()
-    test_div_truncate_negative()
-    test_div_by_one()
-    test_div_by_minus_one()
-    test_div_large_numbers()
-    test_div_max_positive()
-    test_div_max_negative()
-    print("✓ All DIV tests passed (13/13)")
-
-if __name__ == "__main__":
-    main()
+    if result != 0xC0000000:
+        runner.test_fail("DIV max negative", "0xC0000000", f"{result:#010x}")

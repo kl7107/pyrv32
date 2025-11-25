@@ -15,7 +15,8 @@ from cpu import RV32CPU
 from memory import Memory
 from execute import execute_instruction
 
-def test_mulh_small_positive():
+
+def test_mulh_small_positive(runner):
     """Test MULH with small positive numbers: 2 × 3, upper bits = 0"""
     cpu = RV32CPU()
     mem = Memory()
@@ -24,35 +25,35 @@ def test_mulh_small_positive():
     cpu.regs[6] = 3
     
     # MULH x10, x5, x6
-    # opcode=0110011, rd=01010, funct3=001, rs1=00101, rs2=00110, funct7=0000001
     insn = 0b0000001_00110_00101_001_01010_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[10] == 0, f"Expected x10=0, got {cpu.regs[10]}"
-    assert cpu.pc == 4, f"Expected PC=4, got {cpu.pc}"
-    print("✓ test_mulh_small_positive passed")
+    if cpu.regs[10] != 0:
+        runner.test_fail("MULH small positive result", "0", f"{cpu.regs[10]}")
+    if cpu.pc != 4:
+        runner.test_fail("MULH PC increment", "4", f"{cpu.pc}")
 
-def test_mulh_large_positive_negative():
+
+def test_mulh_large_positive_negative(runner):
     """Test MULH: 0x7FFFFFFF × -2, upper bits = -1 (0xFFFFFFFF)"""
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.regs[5] = 0x7FFFFFFF  # Max positive
-    cpu.regs[6] = (-2 & 0xFFFFFFFF)  # -2
+    cpu.regs[5] = 0x7FFFFFFF
+    cpu.regs[6] = (-2 & 0xFFFFFFFF)
     
     # MULH x11, x5, x6
     insn = 0b0000001_00110_00101_001_01011_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    # 0x7FFFFFFF × -2 = -0xFFFFFFFE = 0xFFFFFFFF00000002 (in 64-bit)
-    # Upper 32 bits = 0xFFFFFFFF (-1)
     expected = 0xFFFFFFFF
-    assert cpu.regs[11] == expected, f"Expected x11=0x{expected:08X}, got 0x{cpu.regs[11]:08X}"
-    print("✓ test_mulh_large_positive_negative passed")
+    if cpu.regs[11] != expected:
+        runner.test_fail("MULH positive×negative", f"0x{expected:08X}", f"0x{cpu.regs[11]:08X}")
 
-def test_mulh_medium_values():
+
+def test_mulh_medium_values(runner):
     """Test MULH: 100 × 200 = 20000, upper bits = 0"""
     cpu = RV32CPU()
     mem = Memory()
@@ -65,10 +66,11 @@ def test_mulh_medium_values():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[12] == 0, f"Expected x12=0, got {cpu.regs[12]}"
-    print("✓ test_mulh_medium_values passed")
+    if cpu.regs[12] != 0:
+        runner.test_fail("MULH medium values", "0", f"{cpu.regs[12]}")
 
-def test_mulh_max_positive_squared():
+
+def test_mulh_max_positive_squared(runner):
     """Test MULH: 0x7FFFFFFF × 0x7FFFFFFF, upper bits = 0x3FFFFFFF"""
     cpu = RV32CPU()
     mem = Memory()
@@ -81,18 +83,17 @@ def test_mulh_max_positive_squared():
     
     execute_instruction(cpu, mem, insn)
     
-    # 0x7FFFFFFF × 0x7FFFFFFF = 0x3FFFFFFF00000001
-    # Upper 32 bits = 0x3FFFFFFF
     expected = 0x3FFFFFFF
-    assert cpu.regs[13] == expected, f"Expected x13=0x{expected:08X}, got 0x{cpu.regs[13]:08X}"
-    print("✓ test_mulh_max_positive_squared passed")
+    if cpu.regs[13] != expected:
+        runner.test_fail("MULH max positive squared", f"0x{expected:08X}", f"0x{cpu.regs[13]:08X}")
 
-def test_mulh_max_negative_squared():
+
+def test_mulh_max_negative_squared(runner):
     """Test MULH: 0x80000000 × 0x80000000, upper bits = 0x40000000"""
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.regs[5] = 0x80000000  # Min negative
+    cpu.regs[5] = 0x80000000
     cpu.regs[6] = 0x80000000
     
     # MULH x14, x5, x6
@@ -100,49 +101,47 @@ def test_mulh_max_negative_squared():
     
     execute_instruction(cpu, mem, insn)
     
-    # -0x80000000 × -0x80000000 = 0x4000000000000000
-    # Upper 32 bits = 0x40000000
     expected = 0x40000000
-    assert cpu.regs[14] == expected, f"Expected x14=0x{expected:08X}, got 0x{cpu.regs[14]:08X}"
-    print("✓ test_mulh_max_negative_squared passed")
+    if cpu.regs[14] != expected:
+        runner.test_fail("MULH max negative squared", f"0x{expected:08X}", f"0x{cpu.regs[14]:08X}")
 
-def test_mulh_negative_negative():
+
+def test_mulh_negative_negative(runner):
     """Test MULH: -1 × -1, upper bits = 0"""
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.regs[5] = 0xFFFFFFFF  # -1
-    cpu.regs[6] = 0xFFFFFFFF  # -1
+    cpu.regs[5] = 0xFFFFFFFF
+    cpu.regs[6] = 0xFFFFFFFF
     
     # MULH x15, x5, x6
     insn = 0b0000001_00110_00101_001_01111_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    # -1 × -1 = 1, upper bits = 0
-    assert cpu.regs[15] == 0, f"Expected x15=0, got {cpu.regs[15]}"
-    print("✓ test_mulh_negative_negative passed")
+    if cpu.regs[15] != 0:
+        runner.test_fail("MULH negative×negative", "0", f"{cpu.regs[15]}")
 
-def test_mulh_positive_negative_medium():
+
+def test_mulh_positive_negative_medium(runner):
     """Test MULH: 0x10000 × -0x10000, upper bits = -1"""
     cpu = RV32CPU()
     mem = Memory()
     
     cpu.regs[5] = 0x10000
-    cpu.regs[6] = 0xFFFF0000  # -0x10000 in two's complement
+    cpu.regs[6] = 0xFFFF0000
     
     # MULH x16, x5, x6
     insn = 0b0000001_00110_00101_001_10000_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    # 0x10000 × -0x10000 = -0x100000000
-    # Upper 32 bits = 0xFFFFFFFF (-1)
     expected = 0xFFFFFFFF
-    assert cpu.regs[16] == expected, f"Expected x16=0x{expected:08X}, got 0x{cpu.regs[16]:08X}"
-    print("✓ test_mulh_positive_negative_medium passed")
+    if cpu.regs[16] != expected:
+        runner.test_fail("MULH positive×negative medium", f"0x{expected:08X}", f"0x{cpu.regs[16]:08X}")
 
-def test_mulh_large_positive_squared():
+
+def test_mulh_large_positive_squared(runner):
     """Test MULH: 0x40000000 × 0x40000000, upper bits = 0x10000000"""
     cpu = RV32CPU()
     mem = Memory()
@@ -155,32 +154,30 @@ def test_mulh_large_positive_squared():
     
     execute_instruction(cpu, mem, insn)
     
-    # 0x40000000 × 0x40000000 = 0x1000000000000000
-    # Upper 32 bits = 0x10000000
     expected = 0x10000000
-    assert cpu.regs[17] == expected, f"Expected x17=0x{expected:08X}, got 0x{cpu.regs[17]:08X}"
-    print("✓ test_mulh_large_positive_squared passed")
+    if cpu.regs[17] != expected:
+        runner.test_fail("MULH large positive squared", f"0x{expected:08X}", f"0x{cpu.regs[17]:08X}")
 
-def test_mulh_negative_one_times_max_positive():
+
+def test_mulh_negative_one_times_max_positive(runner):
     """Test MULH: -1 × 0x7FFFFFFF, upper bits = -1"""
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.regs[5] = 0xFFFFFFFF  # -1
-    cpu.regs[6] = 0x7FFFFFFF  # Max positive
+    cpu.regs[5] = 0xFFFFFFFF
+    cpu.regs[6] = 0x7FFFFFFF
     
     # MULH x18, x5, x6
     insn = 0b0000001_00110_00101_001_10010_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    # -1 × 0x7FFFFFFF = -0x7FFFFFFF = 0xFFFFFFFF80000001
-    # Upper 32 bits = 0xFFFFFFFF (-1)
     expected = 0xFFFFFFFF
-    assert cpu.regs[18] == expected, f"Expected x18=0x{expected:08X}, got 0x{cpu.regs[18]:08X}"
-    print("✓ test_mulh_negative_one_times_max_positive passed")
+    if cpu.regs[18] != expected:
+        runner.test_fail("MULH -1×max positive", f"0x{expected:08X}", f"0x{cpu.regs[18]:08X}")
 
-def test_mulh_zero():
+
+def test_mulh_zero(runner):
     """Test MULH: 0 × 5, upper bits = 0"""
     cpu = RV32CPU()
     mem = Memory()
@@ -193,10 +190,11 @@ def test_mulh_zero():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[19] == 0, f"Expected x19=0, got {cpu.regs[19]}"
-    print("✓ test_mulh_zero passed")
+    if cpu.regs[19] != 0:
+        runner.test_fail("MULH zero", "0", f"{cpu.regs[19]}")
 
-def test_mulh_rd_x0():
+
+def test_mulh_rd_x0(runner):
     """Test MULH writing to x0 (should remain 0)"""
     cpu = RV32CPU()
     mem = Memory()
@@ -204,15 +202,16 @@ def test_mulh_rd_x0():
     cpu.regs[5] = 0x7FFFFFFF
     cpu.regs[6] = 0x7FFFFFFF
     
-    # MULH x0, x5, x6 (result discarded)
+    # MULH x0, x5, x6
     insn = 0b0000001_00110_00101_001_00000_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[0] == 0, f"Expected x0=0, got {cpu.regs[0]}"
-    print("✓ test_mulh_rd_x0 passed")
+    if cpu.regs[0] != 0:
+        runner.test_fail("MULH to x0", "0", f"{cpu.regs[0]}")
 
-def test_mulh_same_register():
+
+def test_mulh_same_register(runner):
     """Test MULH with same source registers: 0x8000 × 0x8000"""
     cpu = RV32CPU()
     mem = Memory()
@@ -220,16 +219,15 @@ def test_mulh_same_register():
     cpu.regs[5] = 0x8000
     
     # MULH x20, x5, x5
-    # 0x8000 × 0x8000 = 0x40000000
-    # Upper 32 bits = 0
     insn = 0b0000001_00101_00101_001_10100_0110011
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[20] == 0, f"Expected x20=0, got {cpu.regs[20]}"
-    print("✓ test_mulh_same_register passed")
+    if cpu.regs[20] != 0:
+        runner.test_fail("MULH same register", "0", f"{cpu.regs[20]}")
 
-def test_mulh_one():
+
+def test_mulh_one(runner):
     """Test MULH: 1 × 1, upper bits = 0"""
     cpu = RV32CPU()
     mem = Memory()
@@ -242,26 +240,5 @@ def test_mulh_one():
     
     execute_instruction(cpu, mem, insn)
     
-    assert cpu.regs[21] == 0, f"Expected x21=0, got {cpu.regs[21]}"
-    print("✓ test_mulh_one passed")
-
-def main():
-    """Run all MULH instruction tests."""
-    test_mulh_small_positive()
-    test_mulh_large_positive_negative()
-    test_mulh_medium_values()
-    test_mulh_max_positive_squared()
-    test_mulh_max_negative_squared()
-    test_mulh_negative_negative()
-    test_mulh_positive_negative_medium()
-    test_mulh_large_positive_squared()
-    test_mulh_negative_one_times_max_positive()
-    test_mulh_zero()
-    test_mulh_rd_x0()
-    test_mulh_same_register()
-    test_mulh_one()
-    
-    print("\n✓ All MULH tests passed (13/13)")
-
-if __name__ == '__main__':
-    main()
+    if cpu.regs[21] != 0:
+        runner.test_fail("MULH one", "0", f"{cpu.regs[21]}")
