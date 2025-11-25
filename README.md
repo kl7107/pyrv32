@@ -127,26 +127,20 @@ pyrv32/
 - **BEQ/BNE/BLT/BGE/BLTU/BGEU** - Branch operations
 
 #### M Extension (Multiply/Divide) ✅ COMPLETE
-- **MUL** ✅ - Multiply (lower 32 bits)
-- **MULH** ✅ - Multiply High (signed × signed, upper 32 bits)
-- **MULHSU** ✅ - Multiply High (signed × unsigned, upper 32 bits)
-- **MULHU** ✅ - Multiply High (unsigned × unsigned, upper 32 bits)
-- **DIV** ✅ - Divide (signed)
-- **DIVU** ✅ - Divide Unsigned
-- **REM** ✅ - Remainder (signed)
-- **REMU** ✅ - Remainder Unsigned
 
-**M Extension**: 8/8 instructions (100%) ✅
+| Instruction | Encoding | Function |
+|-------------|----------|----------|
+| **MUL** | funct3=000, funct7=0000001 | Lower 32 bits of signed multiplication |
+| **MULH** | funct3=001, funct7=0000001 | Upper 32 bits (signed × signed) |
+| **MULHSU** | funct3=010, funct7=0000001 | Upper 32 bits (signed × unsigned) |
+| **MULHU** | funct3=011, funct7=0000001 | Upper 32 bits (unsigned × unsigned) |
+| **DIV** | funct3=100, funct7=0000001 | Signed division |
+| **DIVU** | funct3=101, funct7=0000001 | Unsigned division |
+| **REM** | funct3=110, funct7=0000001 | Signed remainder |
+| **REMU** | funct3=111, funct7=0000001 | Unsigned remainder |
 
-**Special Cases (per RISC-V spec)**:
-- **DIV by zero**: returns -1 (0xFFFFFFFF)
-- **DIVU by zero**: returns 0xFFFFFFFF (all 1s)
-- **DIV overflow**: 0x80000000 / -1 = 0x80000000 (not -0x80000000)
-- **REM by zero**: returns dividend
-- **REMU by zero**: returns dividend
-- **REM overflow**: 0x80000000 % -1 = 0
-- **REM sign**: follows dividend sign
-- **DIV/REM truncation**: towards zero (not floor)
+**Status**: 8/8 instructions (100%) ✅  
+**Implementation details and RISC-V special cases documented in `execute.py` docstrings.**
 
 ## Quick Start
 

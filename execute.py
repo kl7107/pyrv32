@@ -190,6 +190,9 @@ def exec_mul(rs1_signed, rs2_signed):
     """
     MUL - Multiply (lower 32 bits of signed multiplication)
     
+    Encoding: R-type, funct3=0b000, funct7=0b0000001
+    Format: mul rd, rs1, rs2
+    
     Performs signed multiplication of two 32-bit values and returns
     the lower 32 bits of the 64-bit result.
     
@@ -199,6 +202,10 @@ def exec_mul(rs1_signed, rs2_signed):
         
     Returns:
         Lower 32 bits of the multiplication result (as unsigned 32-bit)
+        
+    Note:
+        Lower 32 bits are the same whether operands are treated as
+        signed or unsigned. No overflow exceptions.
     """
     # Perform 64-bit signed multiplication
     product = rs1_signed * rs2_signed
@@ -211,6 +218,9 @@ def exec_mulh(rs1_signed, rs2_signed):
     """
     MULH - Multiply High (upper 32 bits of signed × signed multiplication)
     
+    Encoding: R-type, funct3=0b001, funct7=0b0000001
+    Format: mulh rd, rs1, rs2
+    
     Performs signed multiplication of two 32-bit values and returns
     the upper 32 bits of the 64-bit result.
     
@@ -220,6 +230,10 @@ def exec_mulh(rs1_signed, rs2_signed):
         
     Returns:
         Upper 32 bits of the multiplication result (as unsigned 32-bit)
+        
+    Note:
+        Both operands treated as signed. Use MULHU for unsigned×unsigned,
+        MULHSU for signed×unsigned.
     """
     # Perform 64-bit signed multiplication
     product = rs1_signed * rs2_signed
