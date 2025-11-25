@@ -19,6 +19,8 @@ from memory import Memory
 from decoder import decode_instruction, get_instruction_name
 from execute import execute_instruction
 from tests import run_all_tests
+import os
+from pathlib import Path
 
 
 def run_binary(binary_path, verbose=False, start_addr=0x80000000):
@@ -119,8 +121,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 pyrv32.py                      # Run tests only
-  python3 pyrv32.py program.bin          # Run binary file
+  python3 pyrv32.py                      # Run all tests (unit + assembly)
+  python3 pyrv32.py --asm-test           # Run assembly tests only
+  python3 pyrv32.py program.bin          # Run binary file (with all tests first)
+  python3 pyrv32.py --no-test prog.bin   # Run binary without any tests
   python3 pyrv32.py -v program.bin       # Run with instruction trace
   python3 pyrv32.py --start 0x0 prog.bin # Run at different start address
         """
@@ -132,17 +136,43 @@ Examples:
     parser.add_argument('--start', type=lambda x: int(x, 0), default=0x80000000,
                         help='Starting PC address (default: 0x80000000)')
     parser.add_argument('--test', action='store_true',
-                        help='Run tests only (default behavior)')
+                        help='Run all tests (default when no binary provided)')
     parser.add_argument('--no-test', action='store_true',
-                        help='Skip tests (only when running a binary)')
+                        help='Skip all tests')
+    parser.add_argument('--asm-test', action='store_true',
+                        help='Run assembly tests only (skip unit tests)')
     
     args = parser.parse_args()
     
-    # Run tests unless --no-test or binary provided
-    if not args.no_test:
+    # Determine what to run
+    run_unit_tests = not args.no_test and not args.asm_test and not args.binary
+    run_asm_tests = args.asm_test or (not args.no_test and not args.binary)
+    
+    # Run unit tests
+    if run_unit_tests:
         log_paths = run_all_tests()
-        print(f"All tests PASSED ✓")
+        print(f"All unit tests PASSED ✓")
         print(f"Test logs: {', '.join(log_paths)}\n")
+    
+    # Run assembly tests
+    if run_asm_tests:
+        asm_test_dir = Path(__file__).parent / 'asm_tests'
+        if asm_test_dir.exists():
+            sys.path.insert(0, str(asm_test_dir))
+            from run_tests import AsmTestRunner
+            
+            print("=" * 60)
+            print("Running Assembly Tests")
+            print("=" * 60)
+            
+            runner = AsmTestRunner(verbose=args.verbose)
+            success = runner.run_tests(asm_test_dir)
+            
+            if not success:
+                sys.exit(1)
+            print()  # Add blank line after asm tests
+        else:
+            print(f"Warning: Assembly test directory not found: {asm_test_dir}\n")
     
     # Run binary if provided
     if args.binary:
