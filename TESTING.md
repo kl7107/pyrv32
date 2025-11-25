@@ -205,7 +205,76 @@ All test output is logged to temporary files:
 - 5 verified results: x10=5, x11=-5, x12=-1, x13=0x80000000, x14=0
 - Additional edge cases: truncation, sign combinations, large values
 
-**M Extension Progress**: 5/8 instructions implemented (MUL, MULH, MULHSU, MULHU, DIV complete)
+**M Extension Progress**: 8/8 instructions implemented ✅ COMPLETE
+
+### DIVU Instruction (`test_execute_divu.py` - 13 tests)
+
+**File**: `tests/test_execute_divu.py`
+
+**Coverage**:
+1. **Normal Division**: 10 / 2 = 5
+2. **Large Unsigned**: 0x80000000 / 2 = 0x40000000 (treated as unsigned)
+3. **Division by Zero**: 100 / 0 = 0xFFFFFFFF (RISC-V spec)
+4. **Zero Dividend**: 0 / 5 = 0
+5. **Max / Max**: 0xFFFFFFFF / 0xFFFFFFFF = 1
+6. **Max / 2**: 0xFFFFFFFF / 2 = 0x7FFFFFFF
+7. **Max / 3**: 0xFFFFFFFF / 3 = 0x55555555
+8. **Division by 1**: 12345 / 1 = 12345
+9. **Truncation**: 7 / 2 = 3
+10. **Large Numbers**: 1000000 / 3 = 333333
+11. **Max-1 / Max**: 0xFFFFFFFE / 0xFFFFFFFF = 0
+12. **Power of Two**: 0x10000000 / 0x100 = 0x100000
+13. **No Overflow**: Unlike DIV, no special overflow case
+
+**Assembly Test**: `asm_tests/m_ext/test_divu.s`
+- 5 verified results: x10=5, x11=0x40000000, x12=0xFFFFFFFF, x13=0, x14=1
+- Additional edge cases: large/small divisions, max values
+
+### REM Instruction (`test_execute_rem.py` - 13 tests)
+
+**File**: `tests/test_execute_rem.py`
+
+**Coverage**:
+1. **Normal (no remainder)**: 10 % 2 = 0
+2. **With Remainder**: 10 % 3 = 1
+3. **Division by Zero**: 100 % 0 = 100 (returns dividend, RISC-V spec)
+4. **Overflow**: 0x80000000 % -1 = 0 (RISC-V spec)
+5. **Zero Dividend**: 0 % 5 = 0
+6. **Negative Dividend**: -10 % 3 = -1 (sign follows dividend)
+7. **Positive Dividend, Negative Divisor**: 10 % -3 = 1
+8. **Negative / Negative**: -10 % -3 = -1
+9. **7 % 2**: = 1
+10. **-7 % 2**: = -1 (sign follows dividend)
+11. **Large Numbers**: 1000000 % 7 = 1
+12. **Max Positive**: 0x7FFFFFFF % 2 = 1
+13. **Max Negative**: 0x80000000 % 2 = 0
+
+**Assembly Test**: `asm_tests/m_ext/test_rem.s`
+- 5 verified results: x10=0, x11=1, x12=100, x13=0, x14=0
+- Additional edge cases: sign combinations, truncation
+
+### REMU Instruction (`test_execute_remu.py` - 13 tests)
+
+**File**: `tests/test_execute_remu.py`
+
+**Coverage**:
+1. **Normal (no remainder)**: 10 % 2 = 0
+2. **With Remainder**: 10 % 3 = 1
+3. **Division by Zero**: 100 % 0 = 100 (returns dividend)
+4. **Zero Dividend**: 0 % 5 = 0
+5. **Max % 2**: 0xFFFFFFFF % 2 = 1
+6. **Max % 3**: 0xFFFFFFFF % 3 = 0
+7. **Large % Small**: 0x80000000 % 3 = 2
+8. **7 % 2**: = 1
+9. **Large Numbers**: 1000000 % 7 = 1
+10. **Max % Max**: 0xFFFFFFFF % 0xFFFFFFFF = 0
+11. **(Max-1) % Max**: 0xFFFFFFFE % 0xFFFFFFFF = 0xFFFFFFFE
+12. **Power of Two**: 0x12345678 % 0x100 = 0x78
+13. **No Negative Results**: All remainders are positive
+
+**Assembly Test**: `asm_tests/m_ext/test_remu.s`
+- 5 verified results: x10=0, x11=1, x12=100, x13=0, x14=1
+- Additional edge cases: max values, power of two
 
 ## Test Organization
 
@@ -232,7 +301,10 @@ pyrv32/
         ├── test_mulh.s
         ├── test_mulhsu.s
         ├── test_mulhu.s
-        └── test_div.s
+        ├── test_div.s
+        ├── test_divu.s
+        ├── test_rem.s
+        └── test_remu.s
 ```
 
 ## Running Tests
@@ -256,6 +328,9 @@ python3 tests/test_execute_mulh.py
 python3 tests/test_execute_mulhsu.py
 python3 tests/test_execute_mulhu.py
 python3 tests/test_execute_div.py
+python3 tests/test_execute_divu.py
+python3 tests/test_execute_rem.py
+python3 tests/test_execute_remu.py
 ```
 
 ### Assembly Tests

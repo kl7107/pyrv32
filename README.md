@@ -138,6 +138,16 @@ pyrv32/
 
 **M Extension**: 8/8 instructions (100%) ✅
 
+**Special Cases (per RISC-V spec)**:
+- **DIV by zero**: returns -1 (0xFFFFFFFF)
+- **DIVU by zero**: returns 0xFFFFFFFF (all 1s)
+- **DIV overflow**: 0x80000000 / -1 = 0x80000000 (not -0x80000000)
+- **REM by zero**: returns dividend
+- **REMU by zero**: returns dividend
+- **REM overflow**: 0x80000000 % -1 = 0
+- **REM sign**: follows dividend sign
+- **DIV/REM truncation**: towards zero (not floor)
+
 ## Quick Start
 
 Run the simulator (includes all tests and demo):
@@ -150,7 +160,7 @@ This will:
 2. Run demo program that outputs "Hello\n" to UART
 3. Display results and register state
 
-**All 80 tests passing** ✅ (76 unit + 6 assembly)
+**All 152 tests passing** ✅ (141 unit + 11 assembly)
 
 ### Assembly Tests
 
