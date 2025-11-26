@@ -19,20 +19,20 @@ from cpu import RV32CPU
 from memory import Memory
 from decoder import decode_instruction, get_instruction_name
 from execute import execute_instruction
-from exceptions import EBreakException, ECallException
+from exceptions import EBreakException, ECallException, MemoryAccessFault
 from tests import run_all_tests
 import os
 from pathlib import Path
 
 
-def run_binary(binary_path, verbose=False, start_addr=0x00000000):
+def run_binary(binary_path, verbose=False, start_addr=0x80000000):
     """
     Load and run a binary file.
     
     Args:
         binary_path: Path to binary file
         verbose: Print instruction trace
-        start_addr: Starting PC address (default 0x00000000)
+        start_addr: Starting PC address (default 0x80000000 per RISC-V convention)
     """
     print("=" * 60)
     print(f"Loading binary: {binary_path}")
@@ -98,6 +98,19 @@ def run_binary(binary_path, verbose=False, start_addr=0x00000000):
         print(f"\nECALL encountered at PC=0x{e.pc:08x} - not implemented")
         sys.exit(1)
     
+    except MemoryAccessFault as e:
+        print(f"\n{'=' * 60}")
+        print(f"MEMORY ACCESS FAULT")
+        print(f"{'=' * 60}")
+        print(f"Type:    {e.access_type.upper()}")
+        print(f"Address: 0x{e.address:08x}")
+        print(f"PC:      0x{e.pc:08x}")
+        print(f"\nValid memory regions:")
+        print(f"  RAM:  0x80000000 - 0x807FFFFF (8MB)")
+        print(f"  UART: 0x10000000 (TX register only)")
+        print(f"{'=' * 60}")
+        sys.exit(1)
+    
     if step >= max_steps:
         print(f"\nWarning: Stopped after {max_steps} instructions (safety limit)")
     
@@ -138,8 +151,8 @@ Examples:
     parser.add_argument('binary', nargs='?', help='Binary file to execute')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Print instruction trace during execution')
-    parser.add_argument('--start', type=lambda x: int(x, 0), default=0x00000000,
-                        help='Starting PC address (default: 0x00000000)')
+    parser.add_argument('--start', type=lambda x: int(x, 0), default=0x80000000,
+                        help='Starting PC address (default: 0x80000000)')
     parser.add_argument('--test', action='store_true',
                         help='Run all tests (default when no binary provided)')
     parser.add_argument('--no-test', action='store_true',

@@ -15,3 +15,15 @@ class ECallException(Exception):
     def __init__(self, pc):
         self.pc = pc
         super().__init__(f"ECALL at PC=0x{pc:08x}")
+
+
+class MemoryAccessFault(Exception):
+    """Raised when accessing invalid/unmapped memory address"""
+    def __init__(self, address, access_type, pc):
+        self.address = address
+        self.access_type = access_type  # 'load', 'store', or 'fetch'
+        self.pc = pc
+        super().__init__(
+            f"Memory Access Fault: {access_type} at address 0x{address:08x} "
+            f"(PC=0x{pc:08x})"
+        )

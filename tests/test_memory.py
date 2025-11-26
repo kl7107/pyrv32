@@ -15,8 +15,8 @@ from memory import Memory, UART_TX_ADDR
 def test_read_unwritten_memory_returns_zero(runner):
     """Read unwritten memory returns 0"""
     mem = Memory()
-    result = mem.read_byte(0x1000)
-    runner.log(f"  mem.read_byte(0x1000) = 0x{result:02x}")
+    result = mem.read_byte(0x80001000)
+    runner.log(f"  mem.read_byte(0x80001000) = 0x{result:02x}")
     if result != 0:
         runner.test_fail("Unwritten memory", "0x00", f"0x{result:02x}")
 
@@ -24,10 +24,10 @@ def test_read_unwritten_memory_returns_zero(runner):
 def test_write_and_read_byte(runner):
     """Write and read byte"""
     mem = Memory()
-    mem.write_byte(0x1000, 0x42)
-    result = mem.read_byte(0x1000)
-    runner.log(f"  mem.write_byte(0x1000, 0x42)")
-    runner.log(f"  mem.read_byte(0x1000) = 0x{result:02x}")
+    mem.write_byte(0x80001000, 0x42)
+    result = mem.read_byte(0x80001000)
+    runner.log(f"  mem.write_byte(0x80001000, 0x42)")
+    runner.log(f"  mem.read_byte(0x80001000) = 0x{result:02x}")
     if result != 0x42:
         runner.test_fail("Byte read/write", "0x42", f"0x{result:02x}")
 
@@ -35,12 +35,12 @@ def test_write_and_read_byte(runner):
 def test_write_and_read_halfword(runner):
     """Write and read halfword (little-endian)"""
     mem = Memory()
-    mem.write_halfword(0x2000, 0x1234)
-    result = mem.read_halfword(0x2000)
-    b0 = mem.read_byte(0x2000)
-    b1 = mem.read_byte(0x2001)
-    runner.log(f"  mem.write_halfword(0x2000, 0x1234)")
-    runner.log(f"  mem.read_halfword(0x2000) = 0x{result:04x}")
+    mem.write_halfword(0x80002000, 0x1234)
+    result = mem.read_halfword(0x80002000)
+    b0 = mem.read_byte(0x80002000)
+    b1 = mem.read_byte(0x80002001)
+    runner.log(f"  mem.write_halfword(0x80002000, 0x1234)")
+    runner.log(f"  mem.read_halfword(0x80002000) = 0x{result:04x}")
     runner.log(f"  Byte 0: 0x{b0:02x}, Byte 1: 0x{b1:02x} (little-endian)")
     if result != 0x1234 or b0 != 0x34 or b1 != 0x12:
         runner.test_fail("Halfword read/write", "0x1234", f"0x{result:04x}")
@@ -49,14 +49,14 @@ def test_write_and_read_halfword(runner):
 def test_write_and_read_word(runner):
     """Write and read word (little-endian)"""
     mem = Memory()
-    mem.write_word(0x3000, 0xDEADBEEF)
-    result = mem.read_word(0x3000)
-    b0 = mem.read_byte(0x3000)
-    b1 = mem.read_byte(0x3001)
-    b2 = mem.read_byte(0x3002)
-    b3 = mem.read_byte(0x3003)
-    runner.log(f"  mem.write_word(0x3000, 0xDEADBEEF)")
-    runner.log(f"  mem.read_word(0x3000) = 0x{result:08x}")
+    mem.write_word(0x80003000, 0xDEADBEEF)
+    result = mem.read_word(0x80003000)
+    b0 = mem.read_byte(0x80003000)
+    b1 = mem.read_byte(0x80003001)
+    b2 = mem.read_byte(0x80003002)
+    b3 = mem.read_byte(0x80003003)
+    runner.log(f"  mem.write_word(0x80003000, 0xDEADBEEF)")
+    runner.log(f"  mem.read_word(0x80003000) = 0x{result:08x}")
     runner.log(f"  Bytes: 0x{b0:02x} {b1:02x} {b2:02x} {b3:02x} (little-endian)")
     if result != 0xDEADBEEF or b0 != 0xEF or b1 != 0xBE or b2 != 0xAD or b3 != 0xDE:
         runner.test_fail("Word read/write", "0xDEADBEEF", f"0x{result:08x}")
@@ -88,10 +88,10 @@ def test_load_program(runner):
     """Load program"""
     mem = Memory()
     program = [0x11, 0x22, 0x33, 0x44]
-    mem.load_program(0x4000, program)
+    mem.load_program(0x80004000, program)
     for i, expected in enumerate(program):
-        result = mem.read_byte(0x4000 + i)
-        runner.log(f"  mem[0x{0x4000+i:04x}] = 0x{result:02x} (expected 0x{expected:02x})")
+        result = mem.read_byte(0x80004000 + i)
+        runner.log(f"  mem[0x{0x80004000+i:04x}] = 0x{result:02x} (expected 0x{expected:02x})")
         if result != expected:
             runner.test_fail(f"Load program byte {i}", f"0x{expected:02x}", f"0x{result:02x}")
 
@@ -99,14 +99,15 @@ def test_load_program(runner):
 def test_memory_sparseness(runner):
     """Memory is sparse (dict-based)"""
     mem = Memory()
-    mem.write_byte(0x100000, 0xFF)
-    mem.write_byte(0x200000, 0xAA)
-    result1 = mem.read_byte(0x100000)
-    result2 = mem.read_byte(0x200000)
-    result3 = mem.read_byte(0x150000)  # Unwritten address in between
-    runner.log(f"  mem[0x100000] = 0x{result1:02x}")
-    runner.log(f"  mem[0x200000] = 0x{result2:02x}")
-    runner.log(f"  mem[0x150000] = 0x{result3:02x} (unwritten)")
+    # Test sparseness within valid 8MB RAM (0x80000000-0x807FFFFF)
+    mem.write_byte(0x80000000, 0xFF)  # Start of RAM
+    mem.write_byte(0x80400000, 0xAA)  # Middle of RAM (4MB offset)
+    result1 = mem.read_byte(0x80000000)
+    result2 = mem.read_byte(0x80400000)
+    result3 = mem.read_byte(0x80200000)  # Unwritten address in between (2MB offset)
+    runner.log(f"  mem[0x80000000] = 0x{result1:02x}")
+    runner.log(f"  mem[0x80400000] = 0x{result2:02x}")
+    runner.log(f"  mem[0x80200000] = 0x{result3:02x} (unwritten)")
     if result1 != 0xFF or result2 != 0xAA or result3 != 0:
         runner.test_fail("Sparse memory", "0xFF, 0xAA, 0x00", f"0x{result1:02x}, 0x{result2:02x}, 0x{result3:02x}")
 
@@ -161,24 +162,26 @@ def test_uart_invalid_utf8(runner):
 
 
 def test_memory_address_wraparound(runner):
-    """Memory address wraparound at 32-bit boundary"""
+    """Memory address access at upper end of valid RAM"""
     mem = Memory()
-    mem.write_byte(0xFFFFFFFF, 0x99)
-    result = mem.read_byte(0xFFFFFFFF)
-    runner.log(f"  mem[0xFFFFFFFF] = 0x{result:02x}")
+    # Test at the last valid address in 8MB RAM (0x80000000 + 8MB - 1)
+    addr = 0x807FFFFF
+    mem.write_byte(addr, 0x99)
+    result = mem.read_byte(addr)
+    runner.log(f"  mem[0x{addr:08x}] = 0x{result:02x}")
     if result != 0x99:
-        runner.test_fail("Max address write", "0x99", f"0x{result:02x}")
+        runner.test_fail("Max valid RAM address write", "0x99", f"0x{result:02x}")
 
 
 def test_misaligned_halfword(runner):
     """Misaligned halfword access"""
     mem = Memory()
-    mem.write_halfword(0x5001, 0xABCD)  # Odd address
-    result = mem.read_halfword(0x5001)
-    b0 = mem.read_byte(0x5001)
-    b1 = mem.read_byte(0x5002)
-    runner.log(f"  mem.write_halfword(0x5001, 0xABCD) [misaligned]")
-    runner.log(f"  mem.read_halfword(0x5001) = 0x{result:04x}")
+    mem.write_halfword(0x80005001, 0xABCD)  # Odd address
+    result = mem.read_halfword(0x80005001)
+    b0 = mem.read_byte(0x80005001)
+    b1 = mem.read_byte(0x80005002)
+    runner.log(f"  mem.write_halfword(0x80005001, 0xABCD) [misaligned]")
+    runner.log(f"  mem.read_halfword(0x80005001) = 0x{result:04x}")
     runner.log(f"  Bytes: 0x{b0:02x} {b1:02x}")
     if result != 0xABCD or b0 != 0xCD or b1 != 0xAB:
         runner.test_fail("Misaligned halfword", "0xABCD", f"0x{result:04x}")
@@ -187,10 +190,10 @@ def test_misaligned_halfword(runner):
 def test_misaligned_word(runner):
     """Misaligned word access"""
     mem = Memory()
-    mem.write_word(0x6001, 0x12345678)  # Misaligned by 1 byte
-    result = mem.read_word(0x6001)
-    runner.log(f"  mem.write_word(0x6001, 0x12345678) [misaligned]")
-    runner.log(f"  mem.read_word(0x6001) = 0x{result:08x}")
+    mem.write_word(0x80006001, 0x12345678)  # Misaligned by 1 byte
+    result = mem.read_word(0x80006001)
+    runner.log(f"  mem.write_word(0x80006001, 0x12345678) [misaligned]")
+    runner.log(f"  mem.read_word(0x80006001) = 0x{result:08x}")
     if result != 0x12345678:
         runner.test_fail("Misaligned word", "0x12345678", f"0x{result:08x}")
 
@@ -198,12 +201,12 @@ def test_misaligned_word(runner):
 def test_reset_clears_memory_and_uart(runner):
     """reset() clears memory and UART"""
     mem = Memory()
-    mem.write_byte(0x7000, 0x55)
+    mem.write_byte(0x80007000, 0x55)
     mem.write_byte(UART_TX_ADDR, ord('X'))
     mem.reset()
-    result_mem = mem.read_byte(0x7000)
+    result_mem = mem.read_byte(0x80007000)
     result_uart = mem.get_uart_output()
-    runner.log(f"  After reset: mem[0x7000] = 0x{result_mem:02x}")
+    runner.log(f"  After reset: mem[0x80007000] = 0x{result_mem:02x}")
     runner.log(f"  After reset: UART = '{result_uart}'")
     if result_mem != 0:
         runner.test_fail("Reset memory", "0x00", f"0x{result_mem:02x}")

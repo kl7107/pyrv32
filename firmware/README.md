@@ -52,9 +52,15 @@ Or with instruction trace:
 
 ## Memory Map
 
-- `0x00000000` - Program code and data (16MB RAM)
-- `0x00100000` - Stack top (grows downward)
-- `0x10000000` - UART TX register (memory-mapped)
+- `0x80000000` - Program code and data (8MB RAM) - **RISC-V standard DRAM region**
+- `0x80800000` - Stack top (grows downward)
+- `0x10000000` - UART TX register (memory-mapped I/O) - **Standard peripheral region**
+
+This follows the RISC-V convention where:
+- DRAM typically starts at `0x80000000`
+- Peripherals (UART, timers, etc.) are in the `0x10000000` range
+- This matches QEMU virt machine and other common RISC-V platforms
+- 8MB RAM matches target hardware specification
 
 ## Available Functions
 
@@ -80,7 +86,9 @@ void uart_putdec(int v);          // Write decimal value
 - No file I/O or OS features
 - UART is the only I/O mechanism
 - Use `ebreak` instruction or `return` from main() to halt
-- Stack is 1MB, starting at 0x00100000
+- Stack is 8MB, starting at 0x80800000 (top of RAM)
+- Follows RISC-V platform conventions (QEMU virt compatible)
+- Program is loaded into RAM before execution (no bootloader)
 
 ## Example Programs
 

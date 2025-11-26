@@ -20,6 +20,9 @@ def execute_instruction(cpu, memory, insn):
     Returns:
         True if execution should continue, False if program should halt
     """
+    # Update memory's current PC for fault reporting
+    memory.current_pc = cpu.pc
+    
     decoded = decode_instruction(insn)
     fmt = decoded['format']
     opcode = decoded['opcode']

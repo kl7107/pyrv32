@@ -5,9 +5,11 @@ Features:
 - Byte-addressable memory (simple dict-based, sparse)
 - Memory-mapped UART TX at 0x10000000
 - Little-endian byte ordering
+- Memory access fault detection for invalid addresses
 """
 
 from uart import UART, UART_TX_ADDR
+from exceptions import MemoryAccessFault
 
 
 class Memory:
@@ -16,7 +18,19 @@ class Memory:
     
     Uses a dictionary for sparse memory (only stores written addresses).
     Handles UART as memory-mapped I/O at address 0x10000000.
+    
+    Valid address ranges:
+    - 0x80000000 - 0x807FFFFF: RAM (8MB)
+    - 0x10000000 - 0x10000FFF: UART (4KB peripheral region)
     """
+    
+    # Memory map constants
+    RAM_BASE = 0x80000000
+    RAM_SIZE = 8 * 1024 * 1024  # 8MB
+    RAM_END = RAM_BASE + RAM_SIZE - 1
+    
+    UART_BASE = 0x10000000
+    UART_END = 0x10000000  # Only single address supported (TX register)
     
     def __init__(self):
         # Sparse memory - dict mapping address to byte value
@@ -24,6 +38,23 @@ class Memory:
         
         # UART peripheral
         self.uart = UART()
+        
+        # Current PC for fault reporting (set by CPU before each access)
+        self.current_pc = 0
+    
+    def is_valid_address(self, address):
+        """Check if address is in a valid memory region."""
+        address = address & 0xFFFFFFFF
+        
+        # Check RAM range
+        if self.RAM_BASE <= address <= self.RAM_END:
+            return True
+        
+        # Check UART (single address only)
+        if address == UART_TX_ADDR:
+            return True
+        
+        return False
     
     def read_byte(self, address):
         """
@@ -33,9 +64,16 @@ class Memory:
             address: 32-bit memory address
             
         Returns:
-            Byte value (0-255), or 0 if never written
+            Byte value (0-255), or 0 if never written (within valid range)
+            
+        Raises:
+            MemoryAccessFault: If address is outside valid memory regions
         """
         address = address & 0xFFFFFFFF
+        
+        # Check if address is valid
+        if not self.is_valid_address(address):
+            raise MemoryAccessFault(address, 'load', self.current_pc)
         
         # Reading from UART address returns 0 (no RX implemented)
         if address == UART_TX_ADDR:
@@ -50,9 +88,16 @@ class Memory:
         Args:
             address: 32-bit memory address
             value: Byte value to write (0-255)
+            
+        Raises:
+            MemoryAccessFault: If address is outside valid memory regions
         """
         address = address & 0xFFFFFFFF
         value = value & 0xFF
+        
+        # Check if address is valid
+        if not self.is_valid_address(address):
+            raise MemoryAccessFault(address, 'store', self.current_pc)
         
         # UART TX - transmit byte
         if address == UART_TX_ADDR:

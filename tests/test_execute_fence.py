@@ -67,8 +67,8 @@ def test_fence_memory_unchanged(runner):
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.pc = 0x1000
-    mem.write_word(0x3000, 0xDEADBEEF)
+    cpu.pc = 0x80000000  # Valid RAM address
+    mem.write_word(0x80003000, 0xDEADBEEF)  # Valid RAM address
     
     # FENCE
     insn = 0b0001111
@@ -76,8 +76,8 @@ def test_fence_memory_unchanged(runner):
     execute_instruction(cpu, mem, insn)
     
     # Memory should be unchanged
-    if mem.read_word(0x3000) != 0xDEADBEEF:
-        runner.test_fail("FENCE", "0xDEADBEEF", f"0x{mem.read_word(0x3000):08x}")
+    if mem.read_word(0x80003000) != 0xDEADBEEF:
+        runner.test_fail("FENCE", "0xDEADBEEF", f"0x{mem.read_word(0x80003000):08x}")
 
 
 def test_fence_registers_unchanged(runner):
@@ -142,10 +142,10 @@ def test_fence_pc_only_increment(runner):
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.pc = 0x5000
+    cpu.pc = 0x80000000  # Valid RAM address
     cpu.write_reg(10, 0xAAAAAAAA)
     cpu.write_reg(20, 0xBBBBBBBB)
-    mem.write_word(0x6000, 0xCCCCCCCC)
+    mem.write_word(0x80006000, 0xCCCCCCCC)  # Valid RAM address
     
     # FENCE
     insn = 0b0001111
@@ -160,5 +160,5 @@ def test_fence_pc_only_increment(runner):
         runner.test_fail("FENCE", "0xAAAAAAAA", f"0x{cpu.read_reg(10):08x}")
     if cpu.read_reg(20) != 0xBBBBBBBB:
         runner.test_fail("FENCE", "0xBBBBBBBB", f"0x{cpu.read_reg(20):08x}")
-    if mem.read_word(0x6000) != 0xCCCCCCCC:
-        runner.test_fail("FENCE", "0xCCCCCCCC", f"0x{mem.read_word(0x6000):08x}")
+    if mem.read_word(0x80006000) != 0xCCCCCCCC:
+        runner.test_fail("FENCE", "0xCCCCCCCC", f"0x{mem.read_word(0x80006000):08x}")

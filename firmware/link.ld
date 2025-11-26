@@ -3,13 +3,13 @@ ENTRY(_start)
 
 MEMORY
 {
-  RAM (rwx) : ORIGIN = 0x00000000, LENGTH = 16M
-  UART (w)  : ORIGIN = 0x10000000, LENGTH = 4
+  RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 8M
+  UART (w)  : ORIGIN = 0x10000000, LENGTH = 4K
 }
 
 SECTIONS
 {
-  . = 0x00000000;
+  . = 0x80000000;
   
   .text : {
     *(.text.start)   /* Startup code first */
@@ -33,7 +33,7 @@ SECTIONS
   
   /* Stack grows downward from end of RAM */
   . = ALIGN(16);
-  __stack_top = 0x00100000;  /* 1MB */
+  __stack_top = 0x80800000;  /* RAM base + 8MB */
   
   /DISCARD/ : {
     *(.comment)

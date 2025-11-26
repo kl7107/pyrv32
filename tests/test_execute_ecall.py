@@ -79,8 +79,8 @@ def test_ecall_memory_unchanged(runner):
     cpu = RV32CPU()
     mem = Memory()
     
-    cpu.pc = 0x1000
-    mem.write_word(0x2000, 0xCAFEBABE)
+    cpu.pc = 0x80000000  # Valid RAM address
+    mem.write_word(0x80002000, 0xCAFEBABE)  # Valid RAM address
     
     # ECALL
     insn = 0b1110011
@@ -90,8 +90,8 @@ def test_ecall_memory_unchanged(runner):
         runner.test_fail("ECALL", "ECallException raised", "No exception")
     except ECallException:
         # Memory should be unchanged
-        if mem.read_word(0x2000) != 0xCAFEBABE:
-            runner.test_fail("ECALL", "0xCAFEBABE", f"0x{mem.read_word(0x2000):08x}")
+        if mem.read_word(0x80002000) != 0xCAFEBABE:
+            runner.test_fail("ECALL", "0xCAFEBABE", f"0x{mem.read_word(0x80002000):08x}")
 
 
 def test_ecall_pc_unchanged(runner):

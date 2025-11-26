@@ -113,8 +113,8 @@ C Source → GCC → Assembly → Assembler → Object Files → Linker → ELF
 
 ### Memory Layout
 ```
-0x00000000  ┌─────────────────┐
-            │  .text (code)   │  ← Program starts here
+0x80000000  ┌─────────────────┐
+            │  .text (code)   │  ← Program starts here (RISC-V reset vector)
             ├─────────────────┤
             │  .rodata (data) │  ← String constants
             ├─────────────────┤
@@ -125,19 +125,25 @@ C Source → GCC → Assembly → Assembler → Object Files → Linker → ELF
             │                 │
             │  (free space)   │
             │                 │
-0x00100000  │  Stack Top      │  ← sp starts here, grows down
+0x80800000  │  Stack Top      │  ← sp starts here, grows down (8MB total)
             └─────────────────┘
 
 0x10000000  ┌─────────────────┐
-            │  UART TX        │  ← Memory-mapped I/O
+            │  UART TX        │  ← Memory-mapped I/O (standard peripheral region)
             └─────────────────┘
 ```
 
+**This follows RISC-V conventions:**
+- **0x80000000** - Standard DRAM base address (matches QEMU virt, SiFive boards)
+- **0x10000000** - Standard peripheral/UART region
+- **Reset vector** - Execution starts at 0x80000000 per RISC-V platform spec
+- **8MB RAM** - Matches target hardware specification
+
 ### Execution Flow
 ```
-1. Emulator loads binary at 0x00000000
-2. PC starts at 0x00000000 (_start in crt0.S)
-3. Stack pointer set to 0x00100000
+1. Emulator loads binary at 0x80000000 (RISC-V DRAM region)
+2. PC starts at 0x80000000 (_start in crt0.S)
+3. Stack pointer set to 0x80800000 (top of 8MB RAM)
 4. BSS cleared (zero-initialize globals)
 5. main() called
 6. Program uses UART for output (write to 0x10000000)
@@ -145,6 +151,8 @@ C Source → GCC → Assembly → Assembler → Object Files → Linker → ELF
 8. ebreak instruction halts execution
 9. Emulator displays UART output
 ```
+
+**Note:** Program is "magically" loaded into RAM before reset, matching target hardware behavior (no bootloader needed).
 
 ## Build Options
 
