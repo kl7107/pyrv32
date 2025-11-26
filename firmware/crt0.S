@@ -36,7 +36,7 @@ clear_bss:
     j    clear_bss
     
 bss_done:
-    /* Set up argc/argv for main() */
+    /* Set up argc/argv/envp for main() */
     /* argc = 1 (program name only) */
     li   a0, 1
     
@@ -45,7 +45,16 @@ bss_done:
     lui  a1, %hi(argv_array)
     addi a1, a1, %lo(argv_array)
     
-    /* Call main(argc, argv) */
+    /* envp = pointer to environment array (empty) */
+    lui  a2, %hi(env_array)
+    addi a2, a2, %lo(env_array)
+    
+    /* Set global environ variable */
+    lui  t0, %hi(environ)
+    addi t0, t0, %lo(environ)
+    sw   a2, 0(t0)
+    
+    /* Call main(argc, argv, envp) - envp is optional but supported */
     call main
     
     /* If main returns, halt with EBREAK */
@@ -64,3 +73,13 @@ prog_name:
 argv_array:
     .word prog_name    /* argv[0] = "nethack" */
     .word 0            /* argv[1] = NULL */
+
+env_array:
+    .word 0            /* envp[0] = NULL (empty environment) */
+
+    /* Global environ variable (required by getenv()) */
+    .section .bss
+    .align 2
+    .global environ
+environ:
+    .word 0

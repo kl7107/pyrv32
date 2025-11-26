@@ -25,6 +25,7 @@ SECTIONS
   .tdata : {
     __tdata_start = .;
     *(.tdata .tdata.*)
+    . = ALIGN(8);     /* Align to 8 bytes for proper tp setup */
     __tdata_end = .;
   } > RAM
   
