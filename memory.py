@@ -4,10 +4,12 @@ Memory Module - Simple byte-addressable memory with memory-mapped UART
 Features:
 - Byte-addressable memory (simple dict-based, sparse)
 - Memory-mapped UART TX at 0x10000000
+- Memory-mapped millisecond timer at 0x10000004
 - Little-endian byte ordering
 - Memory access fault detection for invalid addresses
 """
 
+import time
 from uart import UART, UART_TX_ADDR
 from exceptions import MemoryAccessFault
 
@@ -18,10 +20,12 @@ class Memory:
     
     Uses a dictionary for sparse memory (only stores written addresses).
     Handles UART as memory-mapped I/O at address 0x10000000.
+    Handles millisecond timer at address 0x10000004.
     
     Valid address ranges:
     - 0x80000000 - 0x807FFFFF: RAM (8MB)
-    - 0x10000000 - 0x10000FFF: UART (4KB peripheral region)
+    - 0x10000000: UART TX register
+    - 0x10000004: Millisecond timer (read-only, uint32)
     """
     
     # Memory map constants
@@ -32,12 +36,17 @@ class Memory:
     UART_BASE = 0x10000000
     UART_END = 0x10000000  # Only single address supported (TX register)
     
+    TIMER_ADDR = 0x10000004  # Millisecond timer (32-bit read-only)
+    
     def __init__(self):
         # Sparse memory - dict mapping address to byte value
         self.mem = {}
         
         # UART peripheral
         self.uart = UART()
+        
+        # Timer - records start time when first instruction executes
+        self.timer_start = None
         
         # Current PC for fault reporting (set by CPU before each access)
         self.current_pc = 0
@@ -52,6 +61,10 @@ class Memory:
         
         # Check UART (single address only)
         if address == UART_TX_ADDR:
+            return True
+        
+        # Check timer (4 bytes: 0x10000004 - 0x10000007)
+        if 0x10000004 <= address <= 0x10000007:
             return True
         
         return False
@@ -75,9 +88,21 @@ class Memory:
         if not self.is_valid_address(address):
             raise MemoryAccessFault(address, 'load', self.current_pc)
         
+        # Initialize timer on first access
+        if self.timer_start is None:
+            self.timer_start = time.time()
+        
         # Reading from UART address returns 0 (no RX implemented)
         if address == UART_TX_ADDR:
             return self.uart.rx_byte()
+        
+        # Reading from timer (0x10000004-0x10000007)
+        if 0x10000004 <= address <= 0x10000007:
+            elapsed_ms = int((time.time() - self.timer_start) * 1000)
+            elapsed_ms = elapsed_ms & 0xFFFFFFFF  # Keep as 32-bit
+            # Return appropriate byte (little-endian)
+            byte_offset = address - 0x10000004
+            return (elapsed_ms >> (byte_offset * 8)) & 0xFF
         
         return self.mem.get(address, 0)
     
@@ -99,9 +124,17 @@ class Memory:
         if not self.is_valid_address(address):
             raise MemoryAccessFault(address, 'store', self.current_pc)
         
+        # Initialize timer on first access
+        if self.timer_start is None:
+            self.timer_start = time.time()
+        
         # UART TX - transmit byte
         if address == UART_TX_ADDR:
             self.uart.tx_byte(value)
+            return
+        
+        # Timer is read-only, writes are ignored
+        if 0x10000004 <= address <= 0x10000007:
             return
         
         # Normal memory write

@@ -15,6 +15,7 @@ Usage:
 
 import sys
 import argparse
+import time
 from cpu import RV32CPU
 from memory import Memory
 from decoder import decode_instruction, get_instruction_name
@@ -65,7 +66,9 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
         print("Executing program...")
     
     step = 0
-    max_steps = 100000  # Safety limit
+    max_steps = 10000000  # Safety limit (10M instructions for benchmarks)
+    
+    start_time = time.time()
     
     try:
         while step < max_steps:
@@ -107,12 +110,27 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
         print(f"PC:      0x{e.pc:08x}")
         print(f"\nValid memory regions:")
         print(f"  RAM:  0x80000000 - 0x807FFFFF (8MB)")
-        print(f"  UART: 0x10000000 (TX register only)")
+        print(f"  UART: 0x10000000 (TX register)")
+        print(f"  TIMER: 0x10000004 (millisecond timer, read-only)")
         print(f"{'=' * 60}")
         sys.exit(1)
     
     if step >= max_steps:
         print(f"\nWarning: Stopped after {max_steps} instructions (safety limit)")
+    
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    
+    # Show execution statistics
+    print(f"\n{'=' * 60}")
+    print(f"Execution Statistics:")
+    print(f"{'=' * 60}")
+    print(f"Instructions executed: {step:,}")
+    print(f"Elapsed time: {elapsed_time:.3f} seconds")
+    if elapsed_time > 0:
+        print(f"Performance: {step/elapsed_time:,.0f} instructions/second")
+        print(f"             {step/elapsed_time/1000:.1f} KIPS")
+    print(f"{'=' * 60}")
     
     # Show UART output
     uart_output = mem.get_uart_output()
