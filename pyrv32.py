@@ -19,19 +19,20 @@ from cpu import RV32CPU
 from memory import Memory
 from decoder import decode_instruction, get_instruction_name
 from execute import execute_instruction
+from exceptions import EBreakException, ECallException
 from tests import run_all_tests
 import os
 from pathlib import Path
 
 
-def run_binary(binary_path, verbose=False, start_addr=0x80000000):
+def run_binary(binary_path, verbose=False, start_addr=0x00000000):
     """
     Load and run a binary file.
     
     Args:
         binary_path: Path to binary file
         verbose: Print instruction trace
-        start_addr: Starting PC address (default 0x80000000)
+        start_addr: Starting PC address (default 0x00000000)
     """
     print("=" * 60)
     print(f"Loading binary: {binary_path}")
@@ -137,8 +138,8 @@ Examples:
     parser.add_argument('binary', nargs='?', help='Binary file to execute')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Print instruction trace during execution')
-    parser.add_argument('--start', type=lambda x: int(x, 0), default=0x80000000,
-                        help='Starting PC address (default: 0x80000000)')
+    parser.add_argument('--start', type=lambda x: int(x, 0), default=0x00000000,
+                        help='Starting PC address (default: 0x00000000)')
     parser.add_argument('--test', action='store_true',
                         help='Run all tests (default when no binary provided)')
     parser.add_argument('--no-test', action='store_true',
