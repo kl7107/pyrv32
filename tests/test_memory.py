@@ -9,7 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from memory import Memory, UART_TX_ADDR
+from memory import Memory
+from uart import DEBUG_UART_TX_ADDR as UART_TX_ADDR
 
 
 def test_read_unwritten_memory_returns_zero(runner):

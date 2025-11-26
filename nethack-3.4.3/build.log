@@ -1,0 +1,20 @@
+=== NetHack 3.4.3 for PyRV32 Build Script ===
+
+[1/5] Building host utilities...
+  makedefs: OK
+[2/5] Generating headers and source files...
+  Generated files: OK
+[3/5] Building runtime objects...
+  Runtime objects: OK
+[4/5] Cross-compiling NetHack...
+rm -f *.o nethack.elf nethack.bin nethack.map
+rm -f monstr.c vis_tab.c pm.h onames.h date.h
+../util/makedefs -p
+../util/makedefs -o
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g -Wall -isystem /usr/lib/picolibc/riscv64-unknown-elf/include -I../sys/pyrv32/include -I../include -I../sys/pyrv32 -ffunction-sections -fdata-sections -DPYRV32 -c monst.c
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g -Wall -isystem /usr/lib/picolibc/riscv64-unknown-elf/include -I../sys/pyrv32/include -I../include -I../sys/pyrv32 -ffunction-sections -fdata-sections -DPYRV32 -c objects.c
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g -Wall -isystem /usr/lib/picolibc/riscv64-unknown-elf/include -I../sys/pyrv32/include -I../include -I../sys/pyrv32 -ffunction-sections -fdata-sections -DPYRV32 -c allmain.c
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g -Wall -isystem /usr/lib/picolibc/riscv64-unknown-elf/include -I../sys/pyrv32/include -I../include -I../sys/pyrv32 -ffunction-sections -fdata-sections -DPYRV32 -c alloc.c
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g -Wall -isystem /usr/lib/picolibc/riscv64-unknown-elf/include -I../sys/pyrv32/include -I../include -I../sys/pyrv32 -ffunction-sections -fdata-sections -DPYRV32 -c apply.c
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g -Wall -isystem /usr/lib/picolibc/riscv64-unknown-elf/include -I../sys/pyrv32/include -I../include -I../sys/pyrv32 -ffunction-sections -fdata-sections -DPYRV32 -c artifact.c
+make: *** [Makefile.pyrv32:187: artifact.o] Hangup

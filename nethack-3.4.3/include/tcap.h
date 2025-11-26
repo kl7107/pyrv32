@@ -8,7 +8,9 @@
 #define TCAP_H
 
 #ifndef MICRO
-# define TERMLIB	/* include termcap code */
+# ifndef ANSI_DEFAULT  /* ANSI_DEFAULT doesn't need termcap library */
+#  define TERMLIB	/* include termcap code */
+# endif
 #endif
 
 /* might display need graphics code? */

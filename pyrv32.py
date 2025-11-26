@@ -26,7 +26,7 @@ import os
 from pathlib import Path
 
 
-def run_binary(binary_path, verbose=False, start_addr=0x80000000):
+def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_interval=0):
     """
     Load and run a binary file.
     
@@ -34,6 +34,7 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
         binary_path: Path to binary file
         verbose: Print instruction trace
         start_addr: Starting PC address (default 0x80000000 per RISC-V convention)
+        pc_trace_interval: If > 0, print PC every N instructions
     """
     print("=" * 60)
     print(f"Loading binary: {binary_path}")
@@ -62,6 +63,8 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
     # Execute
     if verbose:
         print("Executing program (verbose mode)...")
+    elif pc_trace_interval > 0:
+        print(f"Executing program (PC trace every {pc_trace_interval:,} instructions)...")
     else:
         print("Executing program...")
     
@@ -74,6 +77,10 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
         while step < max_steps:
             # Fetch instruction
             insn = mem.read_word(cpu.pc)
+            
+            # PC trace at intervals
+            if pc_trace_interval > 0 and (step % pc_trace_interval) == 0:
+                print(f"[{step:8d}] PC=0x{cpu.pc:08x}", flush=True)
             
             # Decode and display if verbose
             if verbose:
@@ -136,10 +143,21 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000):
     uart_output = mem.get_uart_output()
     if uart_output:
         print(f"\n{'=' * 60}")
-        print(f"UART Output:")
+        print(f"Debug UART Output:")
         print(f"{'=' * 60}")
         print(uart_output, end='')
         if not uart_output.endswith('\n'):
+            print()  # Add newline if output doesn't have one
+        print(f"{'=' * 60}")
+    
+    # Show Console UART output
+    console_output = mem.console_uart.get_output_text()
+    if console_output:
+        print(f"\n{'=' * 60}")
+        print(f"Console UART Output:")
+        print(f"{'=' * 60}")
+        print(console_output, end='')
+        if not console_output.endswith('\n'):
             print()  # Add newline if output doesn't have one
         print(f"{'=' * 60}")
     
@@ -171,6 +189,8 @@ Examples:
                         help='Print instruction trace during execution')
     parser.add_argument('--start', type=lambda x: int(x, 0), default=0x80000000,
                         help='Starting PC address (default: 0x80000000)')
+    parser.add_argument('--pc-trace', type=int, metavar='N', default=0,
+                        help='Print PC every N instructions (e.g., --pc-trace 100000)')
     parser.add_argument('--test', action='store_true',
                         help='Run all tests (default when no binary provided)')
     parser.add_argument('--no-test', action='store_true',
@@ -212,7 +232,8 @@ Examples:
     
     # Run binary if provided
     if args.binary:
-        run_binary(args.binary, verbose=args.verbose, start_addr=args.start)
+        run_binary(args.binary, verbose=args.verbose, start_addr=args.start, 
+                   pc_trace_interval=args.pc_trace)
 
 
 if __name__ == "__main__":

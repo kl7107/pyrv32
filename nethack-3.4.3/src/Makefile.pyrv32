@@ -1,0 +1,195 @@
+#	NetHack src/Makefile for PyRV32 (RISC-V RV32IM)
+#	Based on sys/unix/Makefile.src
+
+SHELL=/bin/sh
+
+# Cross-compilation setup
+PREFIX_CROSS = riscv64-unknown-elf
+CC = $(PREFIX_CROSS)-gcc
+AR = $(PREFIX_CROSS)-ar
+OBJCOPY = $(PREFIX_CROSS)-objcopy
+SIZE = $(PREFIX_CROSS)-size
+LINK = $(CC)
+
+# Architecture flags for RV32IM
+ARCH_FLAGS = -march=rv32im -mabi=ilp32
+
+# Picolibc paths
+PICOLIBC_INC = /usr/lib/picolibc/riscv64-unknown-elf/include
+PICOLIBC_LIB = /usr/lib/picolibc/riscv64-unknown-elf/lib/rv32im/ilp32
+
+# Compiler flags
+CFLAGS = $(ARCH_FLAGS) -O2 -g -Wall \
+	-isystem $(PICOLIBC_INC) \
+	-I../sys/pyrv32/include \
+	-I../include -I../sys/pyrv32 \
+	-ffunction-sections -fdata-sections \
+	-DPYRV32
+
+# Linker script and flags
+LINKER_SCRIPT = ../sys/pyrv32/link.ld
+LDFLAGS = $(ARCH_FLAGS) \
+	-T$(LINKER_SCRIPT) \
+	-L$(PICOLIBC_LIB) \
+	-Wl,--gc-sections \
+	-Wl,-Map=$(GAME).map \
+	-nostartfiles -nodefaultlibs
+
+# Libraries
+LIBS = -lc -lgcc
+
+# Game name
+GAME = nethack
+
+# System source files for PyRV32 (Unix-like, but no ioctl.c - we use ANSI_DEFAULT)
+SYSSRC = ../sys/share/unixtty.c ../sys/unix/unixmain.c \
+	../sys/unix/unixunix.c ../sys/unix/unixres.c
+SYSOBJ = unixmain.o unixtty.o unixunix.o unixres.o
+
+# Window source files (TTY only)
+WINSRC = ../win/tty/getline.c ../win/tty/termcap.c ../win/tty/topl.c \
+	../win/tty/wintty.c
+WINOBJ = getline.o termcap.o topl.o wintty.o
+
+# Runtime objects (from parent directory)
+RUNTIME_OBJS = ../crt0.o ../syscalls.o
+
+# Random number generator (not needed - using picolibc)
+RANDOBJ =
+
+# Timestamp files
+CONFIG_H = ../src/config.h-t
+HACK_H = ../src/hack.h-t
+
+# makedefs utility (built for host)
+MAKEDEFS = ../util/makedefs
+
+# Core game source files
+HACKCSRC = allmain.c alloc.c apply.c artifact.c attrib.c ball.c bones.c \
+	   botl.c cmd.c dbridge.c decl.c detect.c dig.c display.c dlb.c do.c \
+	   do_name.c do_wear.c dog.c dogmove.c dokick.c dothrow.c drawing.c \
+	   dungeon.c eat.c end.c engrave.c exper.c explode.c extralev.c \
+	   files.c fountain.c hack.c hacklib.c invent.c light.c lock.c \
+	   mail.c makemon.c mapglyph.c mcastu.c mhitm.c mhitu.c minion.c \
+	   mklev.c mkmap.c \
+	   mkmaze.c mkobj.c mkroom.c mon.c mondata.c monmove.c monst.c \
+	   mplayer.c mthrowu.c muse.c music.c o_init.c objects.c objnam.c \
+	   options.c pager.c pickup.c pline.c polyself.c potion.c pray.c \
+	   priest.c quest.c questpgr.c read.c rect.c region.c restore.c rip.c \
+	   rnd.c role.c rumors.c save.c shk.c shknam.c sit.c sounds.c sp_lev.c \
+	   spell.c steal.c steed.c teleport.c timeout.c topten.c track.c trap.c \
+	   u_init.c uhitm.c vault.c version.c vision.c weapon.c were.c wield.c \
+	   windows.c wizard.c worm.c worn.c write.c zap.c
+
+# Generated source files
+GENCSRC = monstr.c vis_tab.c
+
+# First objects to build (contain generated data)
+FIRSTOBJ = monst.o objects.o
+
+# All game objects
+HOBJ = $(FIRSTOBJ) allmain.o alloc.o apply.o artifact.o attrib.o ball.o \
+	bones.o botl.o cmd.o dbridge.o decl.o detect.o dig.o display.o dlb.o \
+	do.o do_name.o do_wear.o dog.o dogmove.o dokick.o dothrow.o \
+	drawing.o dungeon.o eat.o end.o engrave.o exper.o explode.o \
+	extralev.o files.o fountain.o hack.o hacklib.o invent.o light.o \
+	lock.o mail.o makemon.o mapglyph.o mcastu.o mhitm.o mhitu.o \
+	minion.o mklev.o mkmap.o \
+	mkmaze.o mkobj.o mkroom.o mon.o mondata.o monmove.o monstr.o \
+	mplayer.o mthrowu.o muse.o music.o o_init.o objnam.o options.o \
+	pager.o pickup.o pline.o polyself.o potion.o pray.o priest.o \
+	quest.o questpgr.o read.o rect.o region.o restore.o rip.o rnd.o \
+	role.o rumors.o save.o shk.o shknam.o sit.o sounds.o sp_lev.o spell.o \
+	steal.o steed.o teleport.o timeout.o topten.o track.o trap.o u_init.o \
+	uhitm.o vault.o vision.o vis_tab.o weapon.o were.o wield.o windows.o \
+	wizard.o worm.o worn.o write.o zap.o \
+	$(RANDOBJ) $(SYSOBJ) $(WINOBJ) version.o
+
+.PHONY: all clean install
+
+all: $(GAME).bin
+	@echo "Build complete: $(GAME).bin"
+	@$(SIZE) $(GAME).elf
+
+# Link the game
+$(GAME).elf: $(HOBJ) $(RUNTIME_OBJS) $(LINKER_SCRIPT)
+	@echo "Linking $(GAME).elf..."
+	$(LINK) $(LDFLAGS) -o $@ $(RUNTIME_OBJS) $(HOBJ) $(LIBS)
+
+# Convert to binary
+$(GAME).bin: $(GAME).elf
+	@echo "Creating binary..."
+	$(OBJCOPY) -O binary $< $@
+
+# Generated source files (must be created by makedefs)
+monstr.c: $(MAKEDEFS)
+	$(MAKEDEFS) -m
+
+vis_tab.c: $(MAKEDEFS)
+	$(MAKEDEFS) -z
+
+pm.h: $(MAKEDEFS)
+	$(MAKEDEFS) -p
+
+onames.h: $(MAKEDEFS)
+	$(MAKEDEFS) -o
+
+date.h: $(MAKEDEFS)
+	$(MAKEDEFS) -v
+
+# First objects depend on generated headers
+$(FIRSTOBJ): pm.h onames.h
+monst.o: monst.c
+	$(CC) $(CFLAGS) -c monst.c
+
+objects.o: objects.c
+	$(CC) $(CFLAGS) -c objects.c
+
+# Generated sources
+monstr.o: monstr.c
+	$(CC) $(CFLAGS) -c monstr.c
+
+vis_tab.o: vis_tab.c
+	$(CC) $(CFLAGS) -c vis_tab.c
+
+# Version with date
+version.o: version.c date.h
+	$(CC) $(CFLAGS) -c version.c
+
+# System-specific sources
+unixtty.o: ../sys/share/unixtty.c
+	$(CC) $(CFLAGS) -c $<
+
+unixmain.o: ../sys/unix/unixmain.c
+	$(CC) $(CFLAGS) -c $<
+
+unixunix.o: ../sys/unix/unixunix.c
+	$(CC) $(CFLAGS) -c $<
+
+unixres.o: ../sys/unix/unixres.c
+	$(CC) $(CFLAGS) -c $<
+
+# Window-specific sources
+getline.o: ../win/tty/getline.c
+	$(CC) $(CFLAGS) -c $<
+
+termcap.o: ../win/tty/termcap.c
+	$(CC) $(CFLAGS) -c $<
+
+topl.o: ../win/tty/topl.c
+	$(CC) $(CFLAGS) -c $<
+
+wintty.o: ../win/tty/wintty.c
+	$(CC) $(CFLAGS) -c $<
+
+# Generic rule for .c -> .o
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+
+clean:
+	rm -f *.o $(GAME).elf $(GAME).bin $(GAME).map
+	rm -f monstr.c vis_tab.c pm.h onames.h date.h
+
+install: $(GAME).bin
+	cp $(GAME).bin ../../firmware/
+	@echo "Installed to ../../firmware/$(GAME).bin"

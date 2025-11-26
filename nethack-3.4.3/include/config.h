@@ -5,6 +5,10 @@
 #ifndef CONFIG_H /* make sure the compiler does not see the typedefs twice */
 #define CONFIG_H
 
+/* PyRV32 port: include pyrv32conf.h which includes unixconf.h */
+#ifdef PYRV32
+#include "pyrv32conf.h"
+#endif
 
 /*
  * Section 1:	Operating and window systems selection.
@@ -14,7 +18,9 @@
  *		provide it (no need to change sec#1, vmsconf.h handles it).
  */
 
+#ifndef PYRV32
 #define UNIX		/* delete if no fork(), exec() available */
+#endif
 
 /* #define MSDOS */	/* in case it's not auto-detected */
 

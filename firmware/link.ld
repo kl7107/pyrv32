@@ -20,19 +20,44 @@ SECTIONS
     *(.rodata*)      /* Read-only data (strings, etc.) */
   } > RAM
   
+  /* Thread Local Storage - for rand/srand and other TLS variables */
+  /* Must come BEFORE .data to avoid overlap issues */
+  .tdata : {
+    __tdata_start = .;
+    *(.tdata .tdata.*)
+    __tdata_end = .;
+  } > RAM
+  
+  .tbss : {
+    __tbss_start = .;
+    *(.tbss .tbss.*)
+    __tbss_end = .;
+  } > RAM
+  
+  __tls_size = __tbss_end - __tdata_start;
+  
   .data : {
     *(.data*)        /* Initialized data */
   } > RAM
   
   .bss : {
     __bss_start = .;
+    *(.sbss*)        /* Small BSS (for small data model) */
     *(.bss*)         /* Uninitialized data */
     *(COMMON)
+    . = ALIGN(16);
     __bss_end = .;
   } > RAM
   
-  /* Stack grows downward from end of RAM */
+  /* Heap starts after BSS (for picolibc) */
   . = ALIGN(16);
+  _end = .;            /* Heap start (legacy) */
+  __heap_start = .;    /* Picolibc heap start */
+  
+  /* Reserve 1MB for stack at top of RAM */
+  __heap_end = 0x80800000 - 0x100000;  /* RAM end - 1MB stack */
+  
+  /* Stack grows downward from end of RAM */
   __stack_top = 0x80800000;  /* RAM base + 8MB */
   
   /DISCARD/ : {

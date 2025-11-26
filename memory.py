@@ -1,31 +1,39 @@
 """
-Memory Module - Simple byte-addressable memory with memory-mapped UART
+Memory Module - Byte-addressable memory with dual UART system
 
 Features:
-- Byte-addressable memory (simple dict-based, sparse)
-- Memory-mapped UART TX at 0x10000000
+- Byte-addressable memory (sparse dict-based)
+- Debug UART at 0x10000000 (TX only, for diagnostics)
+- Console UART at 0x10001000-0x10001008 (TX/RX for user I/O)
 - Memory-mapped millisecond timer at 0x10000004
 - Little-endian byte ordering
-- Memory access fault detection for invalid addresses
+- Memory access fault detection
 """
 
 import time
-from uart import UART, UART_TX_ADDR
+from uart import (
+    UART, ConsoleUART,
+    DEBUG_UART_TX_ADDR,
+    CONSOLE_UART_TX_ADDR, CONSOLE_UART_RX_ADDR, CONSOLE_UART_RX_STATUS_ADDR
+)
 from exceptions import MemoryAccessFault
 
 
 class Memory:
     """
-    Simple byte-addressable memory.
+    Byte-addressable memory with dual UART system.
     
     Uses a dictionary for sparse memory (only stores written addresses).
-    Handles UART as memory-mapped I/O at address 0x10000000.
-    Handles millisecond timer at address 0x10000004.
     
-    Valid address ranges:
+    Memory Map:
     - 0x80000000 - 0x807FFFFF: RAM (8MB)
-    - 0x10000000: UART TX register
-    - 0x10000004: Millisecond timer (read-only, uint32)
+    - 0x10000000: Debug UART TX (write-only)
+    - 0x10000004: Millisecond timer (read-only, 32-bit)
+    - 0x10000008: Unix time - seconds since epoch (read-only, 32-bit)
+    - 0x1000000C: Nanoseconds within current second (read-only, 32-bit, 0-999999999)
+    - 0x10001000: Console UART TX (write-only)
+    - 0x10001004: Console UART RX (read-only, 0xFF if no data)
+    - 0x10001008: Console UART RX Status (read-only, 0=no data, 1=data available)
     """
     
     # Memory map constants
@@ -33,17 +41,36 @@ class Memory:
     RAM_SIZE = 8 * 1024 * 1024  # 8MB
     RAM_END = RAM_BASE + RAM_SIZE - 1
     
-    UART_BASE = 0x10000000
-    UART_END = 0x10000000  # Only single address supported (TX register)
+    # Debug UART
+    DEBUG_UART_TX = DEBUG_UART_TX_ADDR
     
-    TIMER_ADDR = 0x10000004  # Millisecond timer (32-bit read-only)
+    # Timer and clock
+    TIMER_ADDR = 0x10000004          # Millisecond timer
+    CLOCK_TIME_ADDR = 0x10000008     # Unix time (seconds)
+    CLOCK_NSEC_ADDR = 0x1000000C     # Nanoseconds within second
     
-    def __init__(self):
+    # Console UART
+    CONSOLE_UART_TX = CONSOLE_UART_TX_ADDR
+    CONSOLE_UART_RX = CONSOLE_UART_RX_ADDR
+    CONSOLE_UART_RX_STATUS = CONSOLE_UART_RX_STATUS_ADDR
+    
+    def __init__(self, use_console_pty=False, save_console_output=True):
+        """
+        Initialize memory system.
+        
+        Args:
+            use_console_pty: If True, create PTY for Console UART. 
+                           If False, use stdin/stdout (simpler for testing).
+            save_console_output: If True, buffer Console UART output for display at end.
+        """
         # Sparse memory - dict mapping address to byte value
         self.mem = {}
         
-        # UART peripheral
+        # Debug UART (TX only, for printf debugging)
         self.uart = UART()
+        
+        # Console UART (TX/RX for user interaction)
+        self.console_uart = ConsoleUART(use_pty=use_console_pty, save_output=save_console_output)
         
         # Timer - records start time when first instruction executes
         self.timer_start = None
@@ -59,12 +86,24 @@ class Memory:
         if self.RAM_BASE <= address <= self.RAM_END:
             return True
         
-        # Check UART (single address only)
-        if address == UART_TX_ADDR:
+        # Debug UART TX
+        if address == self.DEBUG_UART_TX:
             return True
         
-        # Check timer (4 bytes: 0x10000004 - 0x10000007)
+        # Timer (4 bytes: 0x10000004 - 0x10000007)
         if 0x10000004 <= address <= 0x10000007:
+            return True
+        
+        # Unix time clock (4 bytes: 0x10000008 - 0x1000000B)
+        if 0x10000008 <= address <= 0x1000000B:
+            return True
+        
+        # Nanosecond clock (4 bytes: 0x1000000C - 0x1000000F)
+        if 0x1000000C <= address <= 0x1000000F:
+            return True
+        
+        # Console UART (TX, RX, RX Status)
+        if address in (self.CONSOLE_UART_TX, self.CONSOLE_UART_RX, self.CONSOLE_UART_RX_STATUS):
             return True
         
         return False
@@ -92,11 +131,11 @@ class Memory:
         if self.timer_start is None:
             self.timer_start = time.time()
         
-        # Reading from UART address returns 0 (no RX implemented)
-        if address == UART_TX_ADDR:
-            return self.uart.rx_byte()
+        # Debug UART read returns 0 (no RX)
+        if address == self.DEBUG_UART_TX:
+            return 0
         
-        # Reading from timer (0x10000004-0x10000007)
+        # Timer read (0x10000004-0x10000007) - milliseconds since start
         if 0x10000004 <= address <= 0x10000007:
             elapsed_ms = int((time.time() - self.timer_start) * 1000)
             elapsed_ms = elapsed_ms & 0xFFFFFFFF  # Keep as 32-bit
@@ -104,6 +143,36 @@ class Memory:
             byte_offset = address - 0x10000004
             return (elapsed_ms >> (byte_offset * 8)) & 0xFF
         
+        # Unix time read (0x10000008-0x1000000B) - seconds since epoch
+        if 0x10000008 <= address <= 0x1000000B:
+            unix_time = int(time.time())
+            unix_time = unix_time & 0xFFFFFFFF  # Keep as 32-bit
+            # Return appropriate byte (little-endian)
+            byte_offset = address - 0x10000008
+            return (unix_time >> (byte_offset * 8)) & 0xFF
+        
+        # Nanosecond read (0x1000000C-0x1000000F) - nanoseconds within current second
+        if 0x1000000C <= address <= 0x1000000F:
+            current_time = time.time()
+            nanoseconds = int((current_time - int(current_time)) * 1_000_000_000)
+            nanoseconds = nanoseconds & 0xFFFFFFFF  # Keep as 32-bit
+            # Return appropriate byte (little-endian)
+            byte_offset = address - 0x1000000C
+            return (nanoseconds >> (byte_offset * 8)) & 0xFF
+        
+        # Console UART TX read returns 0 (write-only)
+        if address == self.CONSOLE_UART_TX:
+            return 0
+        
+        # Console UART RX - read byte (0xFF if no data)
+        if address == self.CONSOLE_UART_RX:
+            return self.console_uart.rx_byte()
+        
+        # Console UART RX Status - check for data
+        if address == self.CONSOLE_UART_RX_STATUS:
+            return self.console_uart.rx_status()
+        
+        # Normal memory read
         return self.mem.get(address, 0)
     
     def write_byte(self, address, value):
@@ -128,13 +197,34 @@ class Memory:
         if self.timer_start is None:
             self.timer_start = time.time()
         
-        # UART TX - transmit byte
-        if address == UART_TX_ADDR:
+        # Debug UART TX - transmit byte
+        if address == self.DEBUG_UART_TX:
             self.uart.tx_byte(value)
             return
         
         # Timer is read-only, writes are ignored
         if 0x10000004 <= address <= 0x10000007:
+            return
+        
+        # Unix time is read-only, writes are ignored
+        if 0x10000008 <= address <= 0x1000000B:
+            return
+        
+        # Nanoseconds is read-only, writes are ignored
+        if 0x1000000C <= address <= 0x1000000F:
+            return
+        
+        # Console UART TX - transmit byte
+        if address == self.CONSOLE_UART_TX:
+            self.console_uart.tx_byte(value)
+            return
+        
+        # Console UART RX is read-only, writes ignored
+        if address == self.CONSOLE_UART_RX:
+            return
+        
+        # Console UART RX Status is read-only, writes ignored
+        if address == self.CONSOLE_UART_RX_STATUS:
             return
         
         # Normal memory write
@@ -237,3 +327,4 @@ class Memory:
         """
         self.mem.clear()
         self.uart.reset()
+        # Note: Don't reset console_uart - it maintains its PTY connection

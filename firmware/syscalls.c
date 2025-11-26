@@ -1,0 +1,675 @@
+/*
+ * Newlib Syscall Stubs for PyRV32 Bare-Metal
+ * 
+ * Provides minimal syscall implementations for newlib/picolibc.
+ * These are NOT OS system calls - just glue functions that newlib expects.
+ * 
+ * Memory Map:
+ *   0x10000000 - Debug UART TX (for diagnostics/stderr)
+ *   0x10000004 - Timer (milliseconds since program start)
+ *   0x10000008 - Unix time (seconds since epoch, read-only)
+ *   0x1000000C - Nanoseconds within current second (0-999999999, read-only)
+ *   0x10001000 - Console UART TX (for stdout)
+ *   0x10001004 - Console UART RX (for stdin)
+ *   0x10001008 - Console UART RX Status
+ */
+
+#include <sys/stat.h>
+#include <sys/times.h>
+#include <sys/time.h>
+#include <errno.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+/* Forward declaration for struct passwd */
+struct passwd {
+    char *pw_name;
+    char *pw_passwd;
+    uid_t pw_uid;
+    gid_t pw_gid;
+    char *pw_gecos;
+    char *pw_dir;
+    char *pw_shell;
+};
+
+/* Forward declarations for FILE functions */
+static int stdout_putc(char c, FILE *file);
+static int stderr_putc(char c, FILE *file);
+static int stdin_getc(FILE *file);
+static int null_flush(FILE *file);
+
+/* Initialize FILE structures for picolibc with put/get/flush function pointers */
+static FILE __stdin = {
+    .unget = 0,
+    .flags = __SRD,  /* Read-only */
+    .put = NULL,
+    .get = stdin_getc,
+    .flush = null_flush
+};
+
+static FILE __stdout = {
+    .unget = 0,
+    .flags = __SWR,  /* Write-only */
+    .put = stdout_putc,
+    .get = NULL,
+    .flush = null_flush
+};
+
+static FILE __stderr = {
+    .unget = 0,
+    .flags = __SWR,  /* Write-only */
+    .put = stderr_putc,
+    .get = NULL,
+    .flush = null_flush
+};
+
+/* Export FILE pointers for picolibc */
+FILE *const stdin = &__stdin;
+FILE *const stdout = &__stdout;
+FILE *const stderr = &__stderr;
+
+/* UART addresses */
+#define DEBUG_UART_TX    ((volatile unsigned char *)0x10000000)
+#define CONSOLE_UART_TX  ((volatile unsigned char *)0x10001000)
+#define CONSOLE_UART_RX  ((volatile unsigned char *)0x10001004)
+#define CONSOLE_UART_RX_STATUS ((volatile unsigned char *)0x10001008)
+
+/* Timer and clock */
+#define TIMER_MS         ((volatile unsigned int *)0x10000004)  /* Milliseconds since start */
+#define CLOCK_TIME       ((volatile unsigned int *)0x10000008)  /* Unix time (seconds) */
+#define CLOCK_NSEC       ((volatile unsigned int *)0x1000000C)  /* Nanoseconds within second */
+
+/* File descriptor routing */
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+
+/* NOTE: Picolibc provides its own _sbrk(), so we don't define one here */
+
+/*
+ * stdout_putc - Write character to Console UART (for picolibc FILE*)
+ */
+static int stdout_putc(char c, FILE *file) {
+    (void)file;  /* Unused */
+    *CONSOLE_UART_TX = (unsigned char)c;
+    return (unsigned char)c;
+}
+
+/*
+ * stderr_putc - Write character to Debug UART (for picolibc FILE*)
+ */
+static int stderr_putc(char c, FILE *file) {
+    (void)file;  /* Unused */
+    *DEBUG_UART_TX = (unsigned char)c;
+    return (unsigned char)c;
+}
+
+/*
+ * stdin_getc - Read character from Console UART (for picolibc FILE*)
+ */
+static int stdin_getc(FILE *file) {
+    (void)file;  /* Unused */
+    unsigned char status, byte;
+    
+    /* Poll until data available */
+    do {
+        status = *CONSOLE_UART_RX_STATUS;
+    } while (status == 0);
+    
+    byte = *CONSOLE_UART_RX;
+    if (byte == 0xFF) {
+        return EOF;
+    }
+    return (int)(unsigned char)byte;
+}
+
+/*
+ * null_flush - No-op flush function (no buffering)
+ */
+static int null_flush(FILE *file) {
+    (void)file;  /* Unused */
+    return 0;
+}
+
+/*
+ * Forward declarations
+ */
+int _write(int fd, char *ptr, int len);
+int _read(int fd, char *ptr, int len);
+
+/*
+ * write - Write to a file descriptor (picolibc interface)
+ * 
+ * Picolibc calls write() instead of _write()
+ */
+ssize_t write(int fd, const void *ptr, size_t len) {
+    return _write(fd, (char *)ptr, len);
+}
+
+/*
+ * read - Read from a file descriptor (picolibc interface)
+ * 
+ * Picolibc calls read() instead of _read()
+ */
+ssize_t read(int fd, void *ptr, size_t len) {
+    return _read(fd, (char *)ptr, len);
+}
+
+/*
+ * gettimeofday - Get current time (picolibc interface)
+ * 
+ * Picolibc's time() calls this function
+ */
+int gettimeofday(struct timeval *tv, void *tz) {
+    return _gettimeofday(tv, tz);
+}
+
+/*
+ * _write - Write to a file descriptor
+ * 
+ * File descriptors:
+ *   0 (stdin)  - invalid for writing
+ *   1 (stdout) - Console UART
+ *   2 (stderr) - Debug UART
+ *   other      - not supported
+ */
+int _write(int fd, char *ptr, int len) {
+    int i;
+    
+    if (fd == STDOUT_FILENO) {
+        /* Write to Console UART */
+        for (i = 0; i < len; i++) {
+            *CONSOLE_UART_TX = ptr[i];
+        }
+        return len;
+    } else if (fd == STDERR_FILENO) {
+        /* Write to Debug UART */
+        for (i = 0; i < len; i++) {
+            *DEBUG_UART_TX = ptr[i];
+        }
+        return len;
+    }
+    
+    errno = EBADF;
+    return -1;
+}
+
+/*
+ * _read - Read from a file descriptor
+ * 
+ * File descriptors:
+ *   0 (stdin)  - Console UART RX
+ *   1 (stdout) - invalid for reading
+ *   2 (stderr) - invalid for reading
+ *   other      - not supported
+ */
+int _read(int fd, char *ptr, int len) {
+    int i;
+    unsigned char status, byte;
+    
+    if (fd == STDIN_FILENO) {
+        /* Read from Console UART */
+        for (i = 0; i < len; i++) {
+            /* Check if data available */
+            status = *CONSOLE_UART_RX_STATUS;
+            if (status == 0) {
+                /* No data available */
+                if (i == 0) {
+                    /* No data read at all - return 0 (would block) */
+                    return 0;
+                } else {
+                    /* Return what we got so far */
+                    return i;
+                }
+            }
+            
+            /* Read byte */
+            byte = *CONSOLE_UART_RX;
+            if (byte == 0xFF) {
+                /* 0xFF means no data (shouldn't happen if status==1) */
+                return i;
+            }
+            
+            ptr[i] = byte;
+        }
+        return len;
+    }
+    
+    errno = EBADF;
+    return -1;
+}
+
+/*
+ * _close - Close a file descriptor
+ * 
+ * Not supported in bare-metal.
+ */
+int _close(int fd) {
+    errno = EBADF;
+    return -1;
+}
+
+/*
+ * _fstat - Get file status
+ * 
+ * All file descriptors are character devices.
+ */
+int _fstat(int fd, struct stat *st) {
+    if (fd >= 0 && fd <= 2) {
+        st->st_mode = S_IFCHR;  /* Character device */
+        st->st_blksize = 0;
+        return 0;
+    }
+    
+    errno = EBADF;
+    return -1;
+}
+
+/*
+ * _isatty - Check if file descriptor is a terminal
+ * 
+ * stdin/stdout/stderr are all terminals (UARTs).
+ */
+int _isatty(int fd) {
+    if (fd >= 0 && fd <= 2) {
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * _lseek - Seek in a file
+ * 
+ * Not supported for character devices.
+ */
+int _lseek(int fd, int offset, int whence) {
+    errno = ESPIPE;  /* Illegal seek */
+    return -1;
+}
+
+/*
+ * _exit - Exit program
+ * 
+ * Use EBREAK to halt the emulator cleanly.
+ * Exit status is passed in register a0.
+ */
+void _exit(int status) {
+    /* Write exit message to Debug UART */
+    const char *msg = "\n[Program exited with status ";
+    int i;
+    
+    for (i = 0; msg[i] != '\0'; i++) {
+        *DEBUG_UART_TX = msg[i];
+    }
+    
+    /* Print status as decimal */
+    if (status < 0) {
+        *DEBUG_UART_TX = '-';
+        status = -status;
+    }
+    
+    if (status == 0) {
+        *DEBUG_UART_TX = '0';
+    } else {
+        char digits[10];
+        int ndigits = 0;
+        while (status > 0) {
+            digits[ndigits++] = '0' + (status % 10);
+            status /= 10;
+        }
+        for (i = ndigits - 1; i >= 0; i--) {
+            *DEBUG_UART_TX = digits[i];
+        }
+    }
+    
+    *DEBUG_UART_TX = ']';
+    *DEBUG_UART_TX = '\n';
+    
+    /* Set exit status in a0 and halt with EBREAK */
+    register int a0 __asm__("a0") = status;
+    __asm__ volatile ("ebreak" : : "r"(a0));
+    
+    /* Should never reach here, but just in case */
+    while (1) {
+        /* Spin forever */
+    }
+}
+
+/*
+ * _kill - Send signal to process
+ * 
+ * Not supported in bare-metal.
+ */
+int _kill(int pid, int sig) {
+    errno = EINVAL;
+    return -1;
+}
+
+/*
+ * _getpid - Get process ID
+ * 
+ * Always return 1 (we're the only process).
+ */
+int _getpid(void) {
+    return 1;
+}
+
+/*
+ * _open - Open a file
+ * 
+ * Not supported in bare-metal (no filesystem).
+ */
+int _open(const char *name, int flags, int mode) {
+    errno = ENOENT;
+    return -1;
+}
+
+/*
+ * _unlink - Delete a file
+ * 
+ * Not supported in bare-metal (no filesystem).
+ */
+int _unlink(const char *name) {
+    errno = ENOENT;
+    return -1;
+}
+
+/*
+ * _link - Create hard link
+ * 
+ * Not supported in bare-metal (no filesystem).
+ */
+int _link(const char *oldpath, const char *newpath) {
+    errno = EMLINK;
+    return -1;
+}
+
+/*
+ * _stat - Get file status
+ * 
+ * Not supported in bare-metal (no filesystem).
+ */
+int _stat(const char *file, struct stat *st) {
+    errno = ENOENT;
+    return -1;
+}
+
+/*
+ * _times - Get process times
+ * 
+ * Return elapsed time from timer.
+ */
+clock_t _times(struct tms *buf) {
+    unsigned int ms = *TIMER_MS;
+    
+    if (buf != NULL) {
+        /* All times are user time (no system/children) */
+        buf->tms_utime = ms;
+        buf->tms_stime = 0;
+        buf->tms_cutime = 0;
+        buf->tms_cstime = 0;
+    }
+    
+    return ms;
+}
+
+/*
+ * _gettimeofday - Get current time
+ * 
+ * Use real-time clock (Unix time + nanoseconds).
+ */
+int _gettimeofday(struct timeval *tv, void *tz) {
+    if (tv != NULL) {
+        /* Read Unix time (seconds since epoch) */
+        tv->tv_sec = *CLOCK_TIME;
+        
+        /* Read nanoseconds and convert to microseconds */
+        tv->tv_usec = (*CLOCK_NSEC) / 1000;
+    }
+    
+    return 0;
+}
+
+/*
+ * _fork - Create child process
+ * 
+ * Not supported in bare-metal.
+ */
+int _fork(void) {
+    errno = EAGAIN;
+    return -1;
+}
+
+/*
+ * _execve - Execute program
+ * 
+ * Not supported in bare-metal.
+ */
+int _execve(const char *name, char *const argv[], char *const env[]) {
+    errno = ENOMEM;
+    return -1;
+}
+
+/*
+ * _wait - Wait for child process
+ * 
+ * Not supported in bare-metal.
+ */
+int _wait(int *status) {
+    errno = ECHILD;
+    return -1;
+}
+
+/* Additional syscalls for NetHack */
+
+/* Non-underscore versions (some programs call these directly) */
+int open(const char *name, int flags, ...) {
+    return _open(name, flags, 0);
+}
+
+int close(int fd) {
+    return _close(fd);
+}
+
+off_t lseek(int fd, off_t offset, int whence) {
+    return _lseek(fd, offset, whence);
+}
+
+/* Unix user/group functions (stubs) */
+uid_t getuid(void) {
+    return 0;  /* Always root */
+}
+
+uid_t geteuid(void) {
+    return 0;  /* Always root */
+}
+
+gid_t getgid(void) {
+    return 0;  /* Always root group */
+}
+
+gid_t getegid(void) {
+    return 0;  /* Always root group */
+}
+
+int setuid(uid_t uid) {
+    (void)uid;
+    return 0;  /* Always succeeds */
+}
+
+int setgid(gid_t gid) {
+    (void)gid;
+    return 0;  /* Always succeeds */
+}
+
+int chdir(const char *path) {
+    (void)path;
+    errno = ENOENT;
+    return -1;  /* No filesystem */
+}
+
+char *getcwd(char *buf, unsigned int size) {
+    if (buf && size > 0) {
+        buf[0] = '/';
+        buf[1] = '\0';
+    }
+    return buf;  /* Always "/" */
+}
+
+/* Process functions (stubs) */
+int execl(const char *path, const char *arg, ...) {
+    (void)path;
+    (void)arg;
+    errno = ENOENT;
+    return -1;
+}
+
+/* Additional file/process operations */
+int creat(const char *pathname, mode_t mode) {
+    return open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
+}
+
+int unlink(const char *pathname) {
+    (void)pathname;
+    errno = ENOENT;
+    return -1;
+}
+
+int fstat(int fd, struct stat *buf) {
+    (void)fd;
+    (void)buf;
+    errno = EBADF;
+    return -1;
+}
+
+int isatty(int fd) {
+    /* FDs 0, 1, 2 are UART */
+    return (fd >= 0 && fd <= 2) ? 1 : 0;
+}
+
+pid_t fork(void) {
+    errno = ENOSYS;
+    return -1;
+}
+
+pid_t wait(int *status) {
+    (void)status;
+    errno = ECHILD;
+    return -1;
+}
+
+/* Additional Unix functions for NetHack compatibility */
+pid_t getpid(void) {
+    return 1;  /* Always return PID 1 */
+}
+
+mode_t umask(mode_t mask) {
+    (void)mask;
+    return 0022;  /* Return default umask */
+}
+
+int chmod(const char *pathname, mode_t mode) {
+    (void)pathname;
+    (void)mode;
+    errno = ENOENT;
+    return -1;
+}
+
+int stat(const char *pathname, struct stat *buf) {
+    (void)pathname;
+    (void)buf;
+    errno = ENOENT;
+    return -1;
+}
+
+unsigned int sleep(unsigned int seconds) {
+    /* Simple busy-wait delay using timer */
+    volatile uint32_t *timer = (volatile uint32_t *)0x10000004;
+    uint32_t start = *timer;
+    uint32_t target = start + (seconds * 1000);
+    while (*timer < target) {
+        /* Busy wait */
+    }
+    return 0;
+}
+
+char *getlogin(void) {
+    return "player";  /* Default username */
+}
+
+/* Password database stubs (return NULL - no user database) */
+struct passwd *getpwuid(uid_t uid) {
+    (void)uid;
+    return NULL;  /* No password database */
+}
+
+struct passwd *getpwnam(const char *name) {
+    (void)name;
+    return NULL;  /* No password database */
+}
+
+/* Terminal I/O control stubs */
+int getioctls(void) {
+    return 0;  /* Success, but do nothing */
+}
+
+int setioctls(void) {
+    return 0;  /* Success, but do nothing */
+}
+
+long fpathconf(int fd, int name) {
+    (void)fd;
+    (void)name;
+    return -1;  /* Not supported */
+}
+
+/* Additional file operations */
+int rename(const char *oldpath, const char *newpath) {
+    (void)oldpath;
+    (void)newpath;
+    errno = ENOENT;
+    return -1;
+}
+
+int link(const char *oldpath, const char *newpath) {
+    (void)oldpath;
+    (void)newpath;
+    errno = ENOENT;
+    return -1;
+}
+
+int access(const char *pathname, int mode) {
+    (void)pathname;
+    (void)mode;
+    errno = ENOENT;
+    return -1;
+}
+
+/* Process execution */
+int execv(const char *pathname, char *const argv[]) {
+    (void)pathname;
+    (void)argv;
+    errno = ENOENT;
+    return -1;
+}
+
+/* Signal/suspend stub */
+int dosuspend(void) {
+    return 0;  /* Do nothing */
+}
+
+/* Termcap variables (for ANSI_DEFAULT mode) */
+short ospeed = 0;  /* Baud rate (not used in ANSI_DEFAULT) */
+
+/* Termcap function stubs */
+int tputs(const char *str, int affcnt, int (*putc_func)(int)) {
+    /* In ANSI_DEFAULT mode, just output the string directly */
+    (void)affcnt;
+    if (str) {
+        while (*str) {
+            putc_func(*str++);
+        }
+    }
+    return 0;
+}
