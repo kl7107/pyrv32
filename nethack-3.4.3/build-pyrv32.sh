@@ -78,7 +78,6 @@ echo "  Runtime objects: OK"
 # Step 4: Cross-compile game
 echo "[4/5] Cross-compiling NetHack..."
 cd src
-make -f Makefile.pyrv32 clean
 make -f Makefile.pyrv32
 cd "$NETHACK_ROOT"
 echo "  NetHack binary: OK"
