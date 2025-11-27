@@ -25,6 +25,7 @@ from tests import run_all_tests
 import os
 from pathlib import Path
 from debugger import Debugger
+from syscalls import SyscallHandler
 
 
 def interactive_debugger_cli(cpu, mem, debugger, insn, step):
@@ -332,6 +333,9 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
     mem = Memory()
     cpu.pc = start_addr
     
+    # Initialize syscall handler with filesystem root
+    syscall_handler = SyscallHandler(fs_root="./pyrv32-fs")
+    
     # Initialize debugger
     debugger = Debugger(trace_buffer_size=trace_buffer_size)
     if step_mode:
@@ -381,48 +385,54 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
     
     try:
         while step < max_steps:
-            # Fetch instruction
-            insn = mem.read_word(cpu.pc)
-            
-            # Record in trace buffer BEFORE executing
-            debugger.trace_buffer.add(step, cpu.pc, cpu.regs, insn)
-            
-            # Check for breakpoint or step mode BEFORE executing
-            should_break, break_msg = debugger.should_break(cpu.pc, step, cpu.regs)
-            if should_break:
-                if break_msg:
-                    print(f"\n{break_msg}")
-                decoded = decode_instruction(insn)
-                name = get_instruction_name(decoded)
-                print(f"0x{cpu.pc:08x}: {name:10s} (0x{insn:08x})")
-                print(debugger.format_registers(cpu.regs, cpu.pc, compact=True, show_nonzero_only=True))
+            try:
+                # Fetch instruction
+                insn = mem.read_word(cpu.pc)
                 
-                # Enter interactive debugger
-                if not interactive_debugger_cli(cpu, mem, debugger, insn, step):
-                    print("\nExecution stopped by user")
+                # Record in trace buffer BEFORE executing
+                debugger.trace_buffer.add(step, cpu.pc, cpu.regs, insn)
+                
+                # Check for breakpoint or step mode BEFORE executing
+                should_break, break_msg = debugger.should_break(cpu.pc, step, cpu.regs)
+                if should_break:
+                    if break_msg:
+                        print(f"\n{break_msg}")
+                    decoded = decode_instruction(insn)
+                    name = get_instruction_name(decoded)
+                    print(f"0x{cpu.pc:08x}: {name:10s} (0x{insn:08x})")
+                    print(debugger.format_registers(cpu.regs, cpu.pc, compact=True, show_nonzero_only=True))
+                    
+                    # Enter interactive debugger
+                    if not interactive_debugger_cli(cpu, mem, debugger, insn, step):
+                        print("\nExecution stopped by user")
+                        break
+                
+                # PC trace at intervals
+                if pc_trace_interval > 0 and (step % pc_trace_interval) == 0:
+                    print(f"[{step:8d}] PC=0x{cpu.pc:08x}", flush=True)
+                
+                # Register trace at intervals
+                if reg_trace_interval > 0:
+                    debugger.trace_registers(step, cpu.pc, cpu.regs)
+                
+                # Decode and display if verbose
+                if verbose:
+                    decoded = decode_instruction(insn)
+                    name = get_instruction_name(decoded)
+                    print(f"  [{step:6d}] PC=0x{cpu.pc:08x}: {name:6s} (0x{insn:08x})")
+                
+                # Execute
+                continue_exec = execute_instruction(cpu, mem, insn)
+                
+                if not continue_exec:
+                    if verbose:
+                        print(f"  Execution stopped at step {step}")
                     break
             
-            # PC trace at intervals
-            if pc_trace_interval > 0 and (step % pc_trace_interval) == 0:
-                print(f"[{step:8d}] PC=0x{cpu.pc:08x}", flush=True)
-            
-            # Register trace at intervals
-            if reg_trace_interval > 0:
-                debugger.trace_registers(step, cpu.pc, cpu.regs)
-            
-            # Decode and display if verbose
-            if verbose:
-                decoded = decode_instruction(insn)
-                name = get_instruction_name(decoded)
-                print(f"  [{step:6d}] PC=0x{cpu.pc:08x}: {name:6s} (0x{insn:08x})")
-            
-            # Execute
-            continue_exec = execute_instruction(cpu, mem, insn)
-            
-            if not continue_exec:
-                if verbose:
-                    print(f"  Execution stopped at step {step}")
-                break
+            except ECallException as e:
+                # Handle syscall and continue execution
+                syscall_handler.handle_syscall(cpu, mem)
+                cpu.pc += 4
             
             step += 1
     
@@ -431,10 +441,6 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
             print(f"  [{step:6d}] PC=0x{e.pc:08x}: EBREAK - Program terminated")
         else:
             print(f"\nProgram terminated (ebreak at PC=0x{e.pc:08x}, {step} instructions)")
-    
-    except ECallException as e:
-        print(f"\nECALL encountered at PC=0x{e.pc:08x} - not implemented")
-        sys.exit(1)
     
     except MemoryAccessFault as e:
         print(f"\n{'=' * 60}")

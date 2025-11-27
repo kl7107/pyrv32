@@ -22,6 +22,56 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+/* Linux RV32 syscall numbers */
+#define SYS_GETCWD      17
+#define SYS_UNLINKAT    35
+#define SYS_RENAMEAT    38
+#define SYS_FACCESSAT   48
+#define SYS_CHDIR       49
+#define SYS_OPENAT      56
+#define SYS_CLOSE       57
+#define SYS_LSEEK       62
+#define SYS_READ        63
+#define SYS_WRITE       64
+#define SYS_FSTATAT     79
+#define SYS_FSTAT       80
+#define SYS_EXIT        93
+
+/* ECALL syscall wrappers - invoke Python syscall handler */
+static inline long syscall1(long n, long arg0) {
+    register long a7 asm("a7") = n;
+    register long a0 asm("a0") = arg0;
+    asm volatile ("ecall" : "+r"(a0) : "r"(a7) : "memory");
+    return a0;
+}
+
+static inline long syscall2(long n, long arg0, long arg1) {
+    register long a7 asm("a7") = n;
+    register long a0 asm("a0") = arg0;
+    register long a1 asm("a1") = arg1;
+    asm volatile ("ecall" : "+r"(a0) : "r"(a7), "r"(a1) : "memory");
+    return a0;
+}
+
+static inline long syscall3(long n, long arg0, long arg1, long arg2) {
+    register long a7 asm("a7") = n;
+    register long a0 asm("a0") = arg0;
+    register long a1 asm("a1") = arg1;
+    register long a2 asm("a2") = arg2;
+    asm volatile ("ecall" : "+r"(a0) : "r"(a7), "r"(a1), "r"(a2) : "memory");
+    return a0;
+}
+
+static inline long syscall4(long n, long arg0, long arg1, long arg2, long arg3) {
+    register long a7 asm("a7") = n;
+    register long a0 asm("a0") = arg0;
+    register long a1 asm("a1") = arg1;
+    register long a2 asm("a2") = arg2;
+    register long a3 asm("a3") = arg3;
+    asm volatile ("ecall" : "+r"(a0) : "r"(a7), "r"(a1), "r"(a2), "r"(a3) : "memory");
+    return a0;
+}
+
 /* Forward declaration for struct passwd */
 struct passwd {
     char *pw_name;
@@ -144,7 +194,17 @@ int _read(int fd, char *ptr, int len);
  * Picolibc calls write() instead of _write()
  */
 ssize_t write(int fd, const void *ptr, size_t len) {
-    return _write(fd, (char *)ptr, len);
+    /* FDs 1,2 use UART directly for performance */
+    if (fd == STDOUT_FILENO || fd == STDERR_FILENO) {
+        return _write(fd, (char *)ptr, len);
+    }
+    /* Other FDs use syscall */
+    long ret = syscall3(SYS_WRITE, fd, (long)ptr, (long)len);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return (ssize_t)ret;
 }
 
 /*
@@ -153,7 +213,17 @@ ssize_t write(int fd, const void *ptr, size_t len) {
  * Picolibc calls read() instead of _read()
  */
 ssize_t read(int fd, void *ptr, size_t len) {
-    return _read(fd, (char *)ptr, len);
+    /* FD 0 (stdin) uses UART directly */
+    if (fd == STDIN_FILENO) {
+        return _read(fd, (char *)ptr, len);
+    }
+    /* Other FDs use syscall */
+    long ret = syscall3(SYS_READ, fd, (long)ptr, (long)len);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return (ssize_t)ret;
 }
 
 /*
@@ -465,15 +535,31 @@ int _wait(int *status) {
 
 /* Non-underscore versions (some programs call these directly) */
 int open(const char *name, int flags, ...) {
-    return _open(name, flags, 0);
+    /* Use openat with AT_FDCWD to open relative to current directory */
+    long ret = syscall4(SYS_OPENAT, AT_FDCWD, (long)name, (long)flags, 0644);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return (int)ret;
 }
 
 int close(int fd) {
-    return _close(fd);
+    long ret = syscall1(SYS_CLOSE, fd);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 off_t lseek(int fd, off_t offset, int whence) {
-    return _lseek(fd, offset, whence);
+    long ret = syscall3(SYS_LSEEK, fd, (long)offset, (long)whence);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return (off_t)ret;
 }
 
 /* Unix user/group functions (stubs) */
@@ -504,17 +590,21 @@ int setgid(gid_t gid) {
 }
 
 int chdir(const char *path) {
-    (void)path;
-    errno = ENOENT;
-    return -1;  /* No filesystem */
+    long ret = syscall1(SYS_CHDIR, (long)path);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 char *getcwd(char *buf, unsigned int size) {
-    if (buf && size > 0) {
-        buf[0] = '/';
-        buf[1] = '\0';
+    long ret = syscall2(SYS_GETCWD, (long)buf, (long)size);
+    if (ret < 0) {
+        errno = -ret;
+        return NULL;
     }
-    return buf;  /* Always "/" */
+    return buf;
 }
 
 /* Process functions (stubs) */
@@ -531,16 +621,22 @@ int creat(const char *pathname, mode_t mode) {
 }
 
 int unlink(const char *pathname) {
-    (void)pathname;
-    errno = ENOENT;
-    return -1;
+    /* Use unlinkat with AT_FDCWD and flags=0 */
+    long ret = syscall3(SYS_UNLINKAT, AT_FDCWD, (long)pathname, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int fstat(int fd, struct stat *buf) {
-    (void)fd;
-    (void)buf;
-    errno = EBADF;
-    return -1;
+    long ret = syscall2(SYS_FSTAT, fd, (long)buf);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int isatty(int fd) {
@@ -577,10 +673,13 @@ int chmod(const char *pathname, mode_t mode) {
 }
 
 int stat(const char *pathname, struct stat *buf) {
-    (void)pathname;
-    (void)buf;
-    errno = ENOENT;
-    return -1;
+    /* Use fstatat with AT_FDCWD and flags=0 */
+    long ret = syscall4(SYS_FSTATAT, AT_FDCWD, (long)pathname, (long)buf, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 unsigned int sleep(unsigned int seconds) {
@@ -626,10 +725,13 @@ long fpathconf(int fd, int name) {
 
 /* Additional file operations */
 int rename(const char *oldpath, const char *newpath) {
-    (void)oldpath;
-    (void)newpath;
-    errno = ENOENT;
-    return -1;
+    /* Use renameat with AT_FDCWD for both paths */
+    long ret = syscall4(SYS_RENAMEAT, AT_FDCWD, (long)oldpath, AT_FDCWD, (long)newpath);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int link(const char *oldpath, const char *newpath) {
@@ -640,6 +742,16 @@ int link(const char *oldpath, const char *newpath) {
 }
 
 int access(const char *pathname, int mode) {
+    /* Use faccessat with AT_FDCWD and flags=0 */
+    long ret = syscall3(SYS_FACCESSAT, AT_FDCWD, (long)pathname, (long)mode);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}
+
+int access_stub_removed(const char *pathname, int mode) {
     (void)pathname;
     (void)mode;
     errno = ENOENT;
