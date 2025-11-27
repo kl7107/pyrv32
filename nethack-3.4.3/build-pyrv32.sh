@@ -52,14 +52,21 @@ cd "$NETHACK_ROOT"
 echo "  Generated files: OK"
 
 # Step 3: Build runtime objects
-# Note: crt0.S, syscalls.c, and link.ld are symlinks to master versions in ../../firmware/
+# Note: crt0.S, syscalls.c, and link.ld are symlinks to master versions in ../../../firmware/
 echo "[3/5] Building runtime objects..."
 cd sys/pyrv32
-if [ ! -f ../../crt0.o ]; then
+
+# Follow symlinks to check actual source file timestamps (not symlink timestamps)
+CRT0_SRC=$(readlink -f crt0.S)
+SYSCALLS_SRC=$(readlink -f syscalls.c)
+
+# Always rebuild if source is newer than object (or object doesn't exist)
+if [ ! -f ../../crt0.o ] || [ "$CRT0_SRC" -nt ../../crt0.o ]; then
     echo "  Building crt0.o (from master firmware/crt0.S)..."
     riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -c -o ../../crt0.o crt0.S
 fi
-if [ ! -f ../../syscalls.o ]; then
+
+if [ ! -f ../../syscalls.o ] || [ "$SYSCALLS_SRC" -nt ../../syscalls.o ]; then
     echo "  Building syscalls.o (from master firmware/syscalls.c)..."
     riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -O2 -g \
         -isystem /usr/lib/picolibc/riscv64-unknown-elf/include \

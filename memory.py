@@ -224,7 +224,7 @@ class Memory:
             return
         
         # Console UART RX Status is read-only, writes ignored
-        if address == self.CONSOLE_UART_RX_STATUS:
+        if address == 0x10001008:
             return
         
         # Normal memory write

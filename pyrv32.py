@@ -449,6 +449,9 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         print(f"Type:    {e.access_type.upper()}")
         print(f"Address: 0x{e.address:08x}")
         print(f"PC:      0x{e.pc:08x}")
+        print(f"\nRegisters at fault:")
+        for i in range(0, 32, 4):
+            print(f"  x{i:2d}-x{i+3:2d}: " + " ".join(f"0x{cpu.regs[j]:08x}" for j in range(i, min(i+4, 32))))
         print(f"\nValid memory regions:")
         print(f"  RAM:  0x80000000 - 0x807FFFFF (8MB)")
         print(f"  UART: 0x10000000 (TX register)")
