@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pyrv32": {
+      "command": "/home/dev/git/zesarux/pyrv32/venv/bin/python",
+      "args": [
+        "/home/dev/git/zesarux/pyrv32/pyrv32_mcp/run_server.py"
+      ]
+    }
+  }
+}

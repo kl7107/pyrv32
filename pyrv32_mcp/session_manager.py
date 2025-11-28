@@ -37,6 +37,8 @@ class SessionManager:
             fs_root=fs_root,
             trace_buffer_size=trace_buffer_size
         )
+        with open("/tmp/mcp_debug.log", "a") as f:
+            f.write(f"[DEBUG] Created session {session_id}, total sessions: {len(self.sessions)}, manager_id={id(self)}\n")
         return session_id
     
     def get_session(self, session_id: str) -> Optional[RV32System]:
@@ -49,7 +51,10 @@ class SessionManager:
         Returns:
             RV32System instance, or None if not found
         """
-        return self.sessions.get(session_id)
+        session = self.sessions.get(session_id)
+        with open("/tmp/mcp_debug.log", "a") as f:
+            f.write(f"[DEBUG] get_session({session_id}): {'FOUND' if session else 'NOT FOUND'}, total sessions: {len(self.sessions)}, keys: {list(self.sessions.keys())}, manager_id={id(self)}\n")
+        return session
     
     def destroy_session(self, session_id: str) -> bool:
         """

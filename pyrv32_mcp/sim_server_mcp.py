@@ -1,27 +1,34 @@
+#!/usr/bin/env python3
 """
-MCP server for pyrv32 RISC-V simulator.
+Persistent TCP-based simulator server using MCP protocol.
 
-This is a thin proxy that forwards requests to the persistent TCP simulator server.
+This server runs continuously, speaks MCP protocol over TCP,
+and manages RV32System sessions that persist across client disconnections.
+
+Run with: python3 sim_server_mcp.py
 """
 
 import sys
+import os
 import asyncio
 from typing import Any
 
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from mcp.server import Server
-from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
+from session_manager import SessionManager
 
-from .sim_client import SimulatorClient
 
-
-class PyRV32Server:
-    """MCP server (thin proxy to TCP server)."""
+class SimulatorMCPServer:
+    """MCP server for simulator with TCP transport."""
     
     def __init__(self):
         self.app = Server("pyrv32-simulator")
-        self.client = SimulatorClient()
+        self.session_manager = SessionManager()
         self._register_tools()
+        print(f"Session manager initialized: {id(self.session_manager)}")
     
     def _register_tools(self):
         """Register all MCP tools."""
@@ -265,130 +272,170 @@ class PyRV32Server:
         
         @self.app.call_tool()
         async def call_tool(name: str, arguments: Any) -> list[TextContent]:
-            """Handle tool calls by forwarding to TCP server."""
+            """Handle tool calls."""
             
             try:
                 # Session management
                 if name == "sim_create":
-                    session_id = self.client.create_session(
-                        arguments.get("start_addr", "0x80000000"),
-                        arguments.get("fs_root", ".")
-                    )
+                    start_addr = int(arguments.get("start_addr", "0x80000000"), 16)
+                    fs_root = arguments.get("fs_root", ".")
+                    session_id = self.session_manager.create_session(start_addr, fs_root)
                     return [TextContent(type="text", text=f"Created session: {session_id}")]
                 
                 elif name == "sim_destroy":
-                    success = self.client.destroy_session(arguments["session_id"])
+                    success = self.session_manager.destroy_session(arguments["session_id"])
                     msg = f"Destroyed session: {arguments['session_id']}" if success else f"Error: Session not found"
                     return [TextContent(type="text", text=msg)]
                 
+                # Get session for all other operations
+                session_id = arguments.get("session_id")
+                if not session_id:
+                    return [TextContent(type="text", text="Error: session_id required")]
+                
+                session = self.session_manager.get_session(session_id)
+                if not session:
+                    return [TextContent(type="text", text=f"Error: Session {session_id} not found")]
+                
                 # Binary operations
-                elif name == "sim_load":
-                    self.client.load_binary(arguments["session_id"], arguments["binary_path"])
+                if name == "sim_load":
+                    session.load_binary(arguments["binary_path"])
                     return [TextContent(type="text", text=f"Loaded binary: {arguments['binary_path']}")]
                 
                 elif name == "sim_reset":
-                    self.client.reset(arguments["session_id"])
-                    return [TextContent(type="text", text=f"Reset session: {arguments['session_id']}")]
+                    session.reset()
+                    return [TextContent(type="text", text=f"Reset session: {session_id}")]
                 
                 # Execution
                 elif name == "sim_step":
-                    result = self.client.step(arguments["session_id"], arguments.get("count", 1))
-                    text = f"Status: {result['status']}\nInstructions: {result['instruction_count']}\nPC: 0x{result['pc']:08x}"
-                    if result.get('error'):
-                        text += f"\nError: {result['error']}"
+                    result = session.step(arguments.get("count", 1))
+                    text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
+                    if result.error:
+                        text += f"\nError: {result.error}"
                     return [TextContent(type="text", text=text)]
                 
                 elif name == "sim_run":
-                    result = self.client.run(arguments["session_id"], arguments.get("max_steps", 1000000))
-                    text = f"Status: {result['status']}\nInstructions: {result['instruction_count']}\nPC: 0x{result['pc']:08x}"
-                    if result.get('error'):
-                        text += f"\nError: {result['error']}"
+                    result = session.run(arguments.get("max_steps", 1000000))
+                    text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
+                    if result.error:
+                        text += f"\nError: {result.error}"
                     return [TextContent(type="text", text=text)]
                 
                 elif name == "sim_run_until_output":
-                    result = self.client.run_until_output(arguments["session_id"], arguments.get("max_steps", 1000000))
-                    text = f"Status: {result['status']}\nInstructions: {result['instruction_count']}\nPC: 0x{result['pc']:08x}"
-                    if result.get('error'):
-                        text += f"\nError: {result['error']}"
+                    result = session.run_until_output(arguments.get("max_steps", 1000000))
+                    text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
+                    if result.error:
+                        text += f"\nError: {result.error}"
                     return [TextContent(type="text", text=text)]
                 
                 elif name == "sim_get_status":
-                    status = self.client.get_status(arguments["session_id"])
+                    status = session.get_status()
                     text = f"PC: 0x{status['pc']:08x}\nInstructions: {status['instruction_count']}\nHalted: {status['halted']}\nUART has data: {status['uart_has_data']}"
                     return [TextContent(type="text", text=text)]
                 
                 # UART
                 elif name == "sim_uart_read":
-                    data = self.client.uart_read(arguments["session_id"])
+                    data = session.uart_read()
                     return [TextContent(type="text", text=data)]
                 
                 elif name == "sim_uart_write":
-                    self.client.uart_write(arguments["session_id"], arguments["data"])
+                    session.uart_write(arguments["data"])
                     return [TextContent(type="text", text="Data written to UART")]
                 
                 elif name == "sim_uart_has_data":
-                    has_data = self.client.uart_has_data(arguments["session_id"])
+                    has_data = session.uart_has_data()
                     return [TextContent(type="text", text=str(has_data))]
                 
                 # Registers
                 elif name == "sim_get_registers":
-                    regs = self.client.get_registers(arguments["session_id"])
+                    regs = session.get_registers()
                     text = "\n".join([f"{k}: 0x{v:08x}" for k, v in sorted(regs.items())])
                     return [TextContent(type="text", text=text)]
                 
                 elif name == "sim_get_register":
-                    value = self.client.get_register(arguments["session_id"], arguments["register"])
+                    value = session.get_register(arguments["register"])
                     return [TextContent(type="text", text=f"0x{value:08x}")]
                 
                 elif name == "sim_set_register":
-                    self.client.set_register(arguments["session_id"], arguments["register"], arguments["value"])
+                    value = int(arguments["value"], 16) if isinstance(arguments["value"], str) else arguments["value"]
+                    session.set_register(arguments["register"], value)
                     return [TextContent(type="text", text=f"Set {arguments['register']} = {arguments['value']}")]
                 
                 # Memory
                 elif name == "sim_read_memory":
-                    data = self.client.read_memory(arguments["session_id"], arguments["address"], arguments["length"])
-                    return [TextContent(type="text", text=data)]
+                    address = int(arguments["address"], 16)
+                    data = session.read_memory(address, arguments["length"])
+                    return [TextContent(type="text", text=data.hex())]
                 
                 elif name == "sim_write_memory":
-                    self.client.write_memory(arguments["session_id"], arguments["address"], arguments["data"])
+                    address = int(arguments["address"], 16)
+                    data = bytes.fromhex(arguments["data"])
+                    session.write_memory(address, data)
                     return [TextContent(type="text", text="Memory written")]
                 
                 # Breakpoints
                 elif name == "sim_add_breakpoint":
-                    self.client.add_breakpoint(arguments["session_id"], arguments["address"])
+                    address = int(arguments["address"], 16)
+                    session.add_breakpoint(address)
                     return [TextContent(type="text", text=f"Added breakpoint at {arguments['address']}")]
                 
                 elif name == "sim_remove_breakpoint":
-                    self.client.remove_breakpoint(arguments["session_id"], arguments["address"])
+                    address = int(arguments["address"], 16)
+                    session.remove_breakpoint(address)
                     return [TextContent(type="text", text=f"Removed breakpoint at {arguments['address']}")]
                 
                 elif name == "sim_list_breakpoints":
-                    breakpoints = self.client.list_breakpoints(arguments["session_id"])
-                    text = "\n".join(breakpoints) if breakpoints else "No breakpoints"
+                    breakpoints = session.list_breakpoints()
+                    text = "\n".join([hex(bp) for bp in breakpoints]) if breakpoints else "No breakpoints"
                     return [TextContent(type="text", text=text)]
                 
                 else:
                     return [TextContent(type="text", text=f"Error: Unknown tool {name}")]
             
-            except RuntimeError as e:
-                return [TextContent(type="text", text=f"Error: {str(e)}")]
             except Exception as e:
-                return [TextContent(type="text", text=f"Unexpected error: {str(e)}")]
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
     
-    async def run(self):
-        """Run the MCP server with stdio transport."""
-        async with stdio_server() as (read_stream, write_stream):
+    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        """Handle a single client connection."""
+        addr = writer.get_extra_info('peername')
+        print(f"Client connected: {addr}")
+        
+        try:
             await self.app.run(
-                read_stream,
-                write_stream,
+                reader,
+                writer,
                 self.app.create_initialization_options()
             )
+        except Exception as e:
+            print(f"Error handling client {addr}: {e}")
+        finally:
+            print(f"Client disconnected: {addr}")
+            writer.close()
+            await writer.wait_closed()
+    
+    async def run(self, host="127.0.0.1", port=5555):
+        """Run the TCP server."""
+        server = await asyncio.start_server(
+            self.handle_client,
+            host,
+            port
+        )
+        
+        addr = server.sockets[0].getsockname()
+        print(f"pyrv32 MCP Simulator Server")
+        print(f"Listening on {addr[0]}:{addr[1]}")
+        print(f"Press Ctrl+C to stop")
+        
+        async with server:
+            await server.serve_forever()
 
 
 async def main():
     """Main entry point."""
-    server = PyRV32Server()
-    await server.run()
+    server = SimulatorMCPServer()
+    try:
+        await server.run()
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
 
 
 if __name__ == "__main__":
