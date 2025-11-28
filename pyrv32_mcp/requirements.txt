@@ -1,0 +1,2 @@
+# MCP SDK for Model Context Protocol server
+mcp>=0.9.0
