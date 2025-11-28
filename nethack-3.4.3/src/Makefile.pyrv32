@@ -26,6 +26,9 @@ CFLAGS = $(ARCH_FLAGS) -O2 -g -Wall \
 	-ffunction-sections -fdata-sections \
 	-DPYRV32
 
+# Automatic dependency generation flags
+DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
+
 # Linker script and flags
 LINKER_SCRIPT = ../sys/pyrv32/link.ld
 LDFLAGS = $(ARCH_FLAGS) \
@@ -146,54 +149,66 @@ vis_tab.c:
 # First objects depend on generated headers
 $(FIRSTOBJ): ../include/pm.h ../include/onames.h
 monst.o: monst.c
-	$(CC) $(CFLAGS) -c monst.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c monst.c
 
 objects.o: objects.c
-	$(CC) $(CFLAGS) -c objects.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c objects.c
 
 # Generated sources
 monstr.o: monstr.c
-	$(CC) $(CFLAGS) -c monstr.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c monstr.c
 
 vis_tab.o: vis_tab.c
-	$(CC) $(CFLAGS) -c vis_tab.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c vis_tab.c
 
 # Version with date
 version.o: version.c ../include/date.h
-	$(CC) $(CFLAGS) -c version.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c version.c
 
 # System-specific sources
 unixtty.o: ../sys/share/unixtty.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 unixmain.o: ../sys/unix/unixmain.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 unixunix.o: ../sys/unix/unixunix.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 unixres.o: ../sys/unix/unixres.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 # Window-specific sources
 getline.o: ../win/tty/getline.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 termcap.o: ../win/tty/termcap.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 topl.o: ../win/tty/topl.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 wintty.o: ../win/tty/wintty.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
-# Generic rule for .c -> .o
+# Runtime objects (follow symlinks to build from master firmware/ copies)
+../crt0.o: ../sys/pyrv32/crt0.S
+	$(CC) -march=rv32im -mabi=ilp32 -c -o $@ $<
+
+../syscalls.o: ../sys/pyrv32/syscalls.c
+	$(CC) -march=rv32im -mabi=ilp32 -O2 -g \
+		-isystem /usr/lib/picolibc/riscv64-unknown-elf/include \
+		-I../include -I../sys/pyrv32 -c -o $@ $<
+
+# Generic rule for .c -> .o (with automatic dependency generation)
 .c.o:
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
+
+# Include auto-generated dependency files (if they exist)
+-include $(HOBJ:.o=.d) $(SYSOBJ:.o=.d) $(WINOBJ:.o=.d)
 
 clean:
-	rm -f *.o $(GAME).elf $(GAME).bin $(GAME).map
+	rm -f *.o *.d $(GAME).elf $(GAME).bin $(GAME).map
 
 install: $(GAME).bin
 	cp $(GAME).bin ../../firmware/

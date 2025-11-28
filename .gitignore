@@ -1,6 +1,8 @@
 *.pyc
 __pycache__/
 
+!Makefile
+
 # Assembly test build artifacts
 *.bin
 *.o
