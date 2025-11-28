@@ -697,15 +697,25 @@ char *getlogin(void) {
     return "player";  /* Default username */
 }
 
-/* Password database stubs (return NULL - no user database) */
+/* Password database stubs - return dummy entries */
+static struct passwd dummy_passwd = {
+    .pw_name = "player",
+    .pw_passwd = "x",
+    .pw_uid = 0,
+    .pw_gid = 0,
+    .pw_gecos = "NetHack Player",
+    .pw_dir = "/",
+    .pw_shell = "/bin/sh"
+};
+
 struct passwd *getpwuid(uid_t uid) {
     (void)uid;
-    return NULL;  /* No password database */
+    return &dummy_passwd;
 }
 
 struct passwd *getpwnam(const char *name) {
     (void)name;
-    return NULL;  /* No password database */
+    return &dummy_passwd;
 }
 
 /* Terminal I/O control stubs */

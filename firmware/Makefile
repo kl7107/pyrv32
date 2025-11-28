@@ -41,7 +41,14 @@ BIN = $(PROGRAM).bin
 LST = $(PROGRAM).lst
 MAP = $(PROGRAM).map
 
-.PHONY: all clean run run-verbose disasm size
+.PHONY: all clean run run-verbose disasm size syscalls.o crt0.o
+
+# Object files for external use (tests, etc)
+syscalls.o: syscalls.c
+	$(CC) $(NEWLIB_CFLAGS) -c -o $@ $<
+
+crt0.o: crt0.S
+	$(CC) $(ARCH_FLAGS) -c -o $@ $<
 
 all: $(BIN) $(LST)
 	@echo ""

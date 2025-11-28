@@ -29,13 +29,25 @@ SECTIONS
     __tdata_end = .;
   } > RAM
   
-  .tbss : {
+  .tbss (NOLOAD) : {
     __tbss_start = .;
     *(.tbss .tbss.*)
+    . = ALIGN(8);
     __tbss_end = .;
-  } > RAM
+  } > RAM  
   
   __tls_size = __tbss_end - __tdata_start;
+  
+  /* 
+   * ld.bfd does not advance the location counter for NOLOAD sections like .tbss.
+   * However, we need memory allocated for .tbss because we use it for the initial
+   * TLS storage at runtime (accessed via tp register with negative offsets).
+   * Without this spacer, .data would overlap with .tbss at the same VMA, causing
+   * runtime corruption. This is the standard solution used by picolibc.
+   */
+  .tls_spacer : {
+    . = . + __tls_size;
+  } > RAM
   
   .data : {
     *(.data*)        /* Initialized data */

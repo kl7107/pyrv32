@@ -111,6 +111,33 @@ def interactive_debugger_cli(cpu, mem, debugger, insn, step):
                 for bp in bps:
                     print(f"  {bp}")
         
+        elif cmd_name == 'w' or cmd_name == 'watch':
+            if len(parts) < 2:
+                print("Usage: w <address>  Set write watchpoint at address")
+                print("       wl           List all watchpoints")
+                print("       wc           Clear all watchpoints")
+                print("Example: w 0x801a3df8")
+                continue
+            try:
+                addr = int(parts[1], 0)
+                mem.add_write_watchpoint(addr)
+                print(f"Write watchpoint set at 0x{addr:08x}")
+            except ValueError:
+                print(f"Invalid address: {parts[1]}")
+        
+        elif cmd_name == 'wl':
+            if not mem.write_watchpoints:
+                print("No write watchpoints set")
+            else:
+                print("Write watchpoints:")
+                for addr in sorted(mem.write_watchpoints):
+                    print(f"  0x{addr:08x}")
+        
+        elif cmd_name == 'wc':
+            count = len(mem.write_watchpoints)
+            mem.write_watchpoints.clear()
+            print(f"Cleared all write watchpoints ({count} total)")
+        
         elif cmd_name == 'i' or cmd_name == 'info':
             if len(parts) < 2:
                 print("Usage: i r  (info registers)")
@@ -276,6 +303,11 @@ Debugger Commands:
   d <num>               Delete breakpoint by number
   d *                   Delete all breakpoints
   l                     List all breakpoints
+  
+  w <addr>              Set write watchpoint at address
+  wl                    List all write watchpoints
+  wc                    Clear all write watchpoints
+  
   i r                   Show registers
   i b                   Show breakpoints
   
@@ -308,7 +340,7 @@ Debugger Commands:
 
 def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_interval=0, 
                step_mode=False, breakpoints=None, reg_trace_interval=0, reg_trace_file=None,
-               reg_trace_nonzero=False, trace_buffer_size=10000):
+               reg_trace_nonzero=False, trace_buffer_size=10000, write_watchpoints=None):
     """
     Load and run a binary file.
     
@@ -323,6 +355,7 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         reg_trace_file: File to save register trace (None = stdout)
         reg_trace_nonzero: Only show non-zero registers in trace
         trace_buffer_size: Size of execution trace ring buffer
+        write_watchpoints: List of memory addresses to watch for writes
     """
     print("=" * 60)
     print(f"Loading binary: {binary_path}")
@@ -366,6 +399,12 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         sys.exit(1)
     
     mem.load_program(cpu.pc, program_bytes)
+    
+    # Set write watchpoints if requested
+    if write_watchpoints:
+        for addr in write_watchpoints:
+            mem.add_write_watchpoint(addr)
+            print(f"Write watchpoint set at 0x{addr:08x}")
     
     print(f"\nProgram loaded at 0x{cpu.pc:08x}")
     print(f"Program size: {len(program_bytes)} bytes\n")
@@ -545,6 +584,9 @@ Examples:
     parser.add_argument('-b', '--breakpoint', type=lambda x: int(x, 0), action='append',
                         metavar='ADDR', dest='breakpoints',
                         help='Set breakpoint at address (can be used multiple times)')
+    parser.add_argument('-w', '--watch-write', type=lambda x: int(x, 0), action='append',
+                        metavar='ADDR', dest='write_watchpoints',
+                        help='Watch for writes to memory address (can be used multiple times)')
     parser.add_argument('--reg-trace', type=int, metavar='N',
                         help='Enable register tracing every N instructions')
     parser.add_argument('--reg-file', type=str, metavar='FILE',
@@ -594,7 +636,8 @@ Examples:
                    reg_trace_interval=args.reg_trace or 0,
                    reg_trace_file=args.reg_file,
                    reg_trace_nonzero=args.reg_nonzero,
-                   trace_buffer_size=args.trace_size)
+                   trace_buffer_size=args.trace_size,
+                   write_watchpoints=args.write_watchpoints)
 
 
 if __name__ == "__main__":

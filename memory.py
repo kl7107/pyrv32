@@ -72,6 +72,10 @@ class Memory:
         # Console UART (TX/RX for user interaction)
         self.console_uart = ConsoleUART(use_pty=use_console_pty, save_output=save_console_output)
         
+        # Memory watchpoints for debugging
+        self.read_watchpoints = set()   # Addresses to watch for reads
+        self.write_watchpoints = set()  # Addresses to watch for writes
+        
         # Timer - records start time when first instruction executes
         self.timer_start = None
         
@@ -172,6 +176,10 @@ class Memory:
         if address == self.CONSOLE_UART_RX_STATUS:
             return self.console_uart.rx_status()
         
+        # Check read watchpoints
+        if address in self.read_watchpoints:
+            print(f"\n[READ WATCHPOINT] Read from {address:#x} (PC={self.current_pc:#x})")
+        
         # Normal memory read
         return self.mem.get(address, 0)
     
@@ -188,6 +196,10 @@ class Memory:
         """
         address = address & 0xFFFFFFFF
         value = value & 0xFF
+        
+        # Check write watchpoints
+        if address in self.write_watchpoints:
+            print(f"\n[WRITE WATCHPOINT] Write to {address:#x} = {value:#04x} (PC={self.current_pc:#x})")
         
         # Check if address is valid
         if not self.is_valid_address(address):
@@ -328,3 +340,24 @@ class Memory:
         self.mem.clear()
         self.uart.reset()
         # Note: Don't reset console_uart - it maintains its PTY connection
+    
+    def add_read_watchpoint(self, address):
+        """Add a read watchpoint at the specified address."""
+        self.read_watchpoints.add(address & 0xFFFFFFFF)
+    
+    def add_write_watchpoint(self, address):
+        """Add a write watchpoint at the specified address."""
+        self.write_watchpoints.add(address & 0xFFFFFFFF)
+    
+    def remove_read_watchpoint(self, address):
+        """Remove a read watchpoint."""
+        self.read_watchpoints.discard(address & 0xFFFFFFFF)
+    
+    def remove_write_watchpoint(self, address):
+        """Remove a write watchpoint."""
+        self.write_watchpoints.discard(address & 0xFFFFFFFF)
+    
+    def clear_watchpoints(self):
+        """Clear all watchpoints."""
+        self.read_watchpoints.clear()
+        self.write_watchpoints.clear()
