@@ -18,7 +18,7 @@ class SessionManager:
         self.sessions: Dict[str, RV32System] = {}
     
     def create_session(self, start_addr: int = 0x80000000, 
-                      fs_root: str = ".", 
+                      fs_root: str = "pyrv32_sim_fs", 
                       trace_buffer_size: int = 1000) -> str:
         """
         Create a new simulator session.

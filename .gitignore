@@ -8,3 +8,5 @@ __pycache__/
 *.bin
 *.o
 *.lst
+
+pyrv32_sim_fs/

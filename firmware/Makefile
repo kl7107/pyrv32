@@ -16,8 +16,11 @@ WARN_FLAGS = -Wall -Wextra
 PICOLIBC_INC = /usr/lib/picolibc/riscv64-unknown-elf/include
 PICOLIBC_LIB = /usr/lib/picolibc/riscv64-unknown-elf/lib/rv32im/ilp32
 
+# Platform include path (OS-level headers like sys/ioctl.h)
+PLATFORM_INC = include
+
 # Flags for programs using picolibc
-NEWLIB_CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) -isystem $(PICOLIBC_INC)
+NEWLIB_CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) -I$(PLATFORM_INC) -isystem $(PICOLIBC_INC)
 NEWLIB_LDFLAGS = -T link.ld -L$(PICOLIBC_LIB) -Wl,--gc-sections -nostartfiles -nodefaultlibs
 
 # Flags for standalone programs (no libc)

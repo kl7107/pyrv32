@@ -17,6 +17,9 @@
 #include <sys/stat.h>
 #include <sys/times.h>
 #include <sys/time.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -718,13 +721,124 @@ struct passwd *getpwnam(const char *name) {
     return &dummy_passwd;
 }
 
-/* Terminal I/O control stubs */
-int getioctls(void) {
-    return 0;  /* Success, but do nothing */
+/* Terminal I/O control - ioctl implementation */
+int ioctl(int fd, unsigned long request, ...) {
+    va_list args;
+    va_start(args, request);
+    
+    /* Handle TIOCGWINSZ - get terminal window size */
+    if (request == TIOCGWINSZ) {
+        struct winsize *ws = va_arg(args, struct winsize *);
+        if (ws) {
+            /* Return standard 80x24 terminal size */
+            ws->ws_row = 24;
+            ws->ws_col = 80;
+            ws->ws_xpixel = 0;
+            ws->ws_ypixel = 0;
+            va_end(args);
+            return 0;
+        }
+    }
+    
+    va_end(args);
+    
+    /* Unsupported ioctl */
+    (void)fd;
+    errno = ENOTTY;
+    return -1;
 }
 
-int setioctls(void) {
-    return 0;  /* Success, but do nothing */
+/* Terminal I/O control functions (termios) */
+/* We implement these as no-ops since we use ANSI_DEFAULT mode */
+
+int tcgetattr(int fd, struct termios *termios_p) {
+    if (!termios_p) {
+        errno = EINVAL;
+        return -1;
+    }
+    
+    /* Return a default termios structure */
+    /* Set up reasonable defaults for a dumb terminal */
+    termios_p->c_iflag = ICRNL;  /* Map CR to NL on input */
+    termios_p->c_oflag = OPOST | ONLCR;  /* Post-process output, map NL to CR-NL */
+    termios_p->c_cflag = CS8 | CREAD | CLOCAL | B9600;  /* 8-bit, enable receiver, ignore modem */
+    termios_p->c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK;  /* Canonical mode with echo */
+    
+    /* Set control characters */
+    termios_p->c_cc[VINTR]    = 0x03;  /* ^C */
+    termios_p->c_cc[VQUIT]    = 0x1C;  /* ^\ */
+    termios_p->c_cc[VERASE]   = 0x7F;  /* DEL */
+    termios_p->c_cc[VKILL]    = 0x15;  /* ^U */
+    termios_p->c_cc[VEOF]     = 0x04;  /* ^D */
+    termios_p->c_cc[VTIME]    = 0;
+    termios_p->c_cc[VMIN]     = 1;
+    termios_p->c_cc[VSTART]   = 0x11;  /* ^Q */
+    termios_p->c_cc[VSTOP]    = 0x13;  /* ^S */
+    termios_p->c_cc[VSUSP]    = 0x1A;  /* ^Z */
+    
+    termios_p->c_ispeed = B9600;
+    termios_p->c_ospeed = B9600;
+    
+    (void)fd;
+    return 0;
+}
+
+int tcsetattr(int fd, int optional_actions, const struct termios *termios_p) {
+    /* No-op - we don't actually change terminal settings */
+    /* ANSI_DEFAULT mode handles everything */
+    (void)fd;
+    (void)optional_actions;
+    (void)termios_p;
+    return 0;
+}
+
+int tcsendbreak(int fd, int duration) {
+    (void)fd;
+    (void)duration;
+    return 0;
+}
+
+int tcdrain(int fd) {
+    (void)fd;
+    return 0;
+}
+
+int tcflush(int fd, int queue_selector) {
+    (void)fd;
+    (void)queue_selector;
+    return 0;
+}
+
+int tcflow(int fd, int action) {
+    (void)fd;
+    (void)action;
+    return 0;
+}
+
+speed_t cfgetispeed(const struct termios *termios_p) {
+    return termios_p ? termios_p->c_ispeed : B9600;
+}
+
+speed_t cfgetospeed(const struct termios *termios_p) {
+    return termios_p ? termios_p->c_ospeed : B9600;
+}
+
+int cfsetispeed(struct termios *termios_p, speed_t speed) {
+    if (termios_p) {
+        termios_p->c_ispeed = speed;
+        return 0;
+    }
+    errno = EINVAL;
+    return -1;
+}
+
+int cfsetospeed(struct termios *termios_p, speed_t speed) {
+    if (termios_p) {
+        termios_p->c_ospeed = speed;
+        return 0;
+    }
+    errno = EINVAL;
+    return -1;
 }
 
 long fpathconf(int fd, int name) {
@@ -776,9 +890,12 @@ int execv(const char *pathname, char *const argv[]) {
     return -1;
 }
 
-/* Signal/suspend stub */
-int dosuspend(void) {
-    return 0;  /* Do nothing */
+/* Signal handling stubs */
+int kill(pid_t pid, int sig) {
+    (void)pid;
+    (void)sig;
+    errno = ESRCH;  /* No such process */
+    return -1;
 }
 
 /* Termcap variables (for ANSI_DEFAULT mode) */

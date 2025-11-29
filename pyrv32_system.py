@@ -45,7 +45,8 @@ class RV32System:
             trace_buffer_size: Size of execution trace buffer
         """
         self.cpu = RV32CPU()
-        self.memory = Memory()
+        # Always use PTY for Console UART in headless/server mode
+        self.memory = Memory(use_console_pty=False, save_console_output=True)
         self.syscall_handler = SyscallHandler(fs_root=fs_root)
         self.debugger = Debugger(trace_buffer_size=trace_buffer_size)
         
@@ -54,8 +55,9 @@ class RV32System:
         self.instruction_count = 0
         self.halted = False
         
-        # Track UART output position for incremental reads
-        self._uart_read_pos = 0
+        # Track UART output positions for incremental reads
+        self._debug_uart_read_pos = 0
+        self._console_uart_read_pos = 0
     
     def load_binary(self, binary_path):
         """
@@ -97,7 +99,8 @@ class RV32System:
         self.cpu.pc = self.start_addr
         self.instruction_count = 0
         self.halted = False
-        self._uart_read_pos = 0
+        self._debug_uart_read_pos = 0
+        self._console_uart_read_pos = 0
         self.debugger.trace_buffer.clear()
     
     def step(self, count=1):
@@ -220,13 +223,14 @@ class RV32System:
         Returns:
             ExecutionResult
         """
-        initial_output_len = len(self.memory.console_uart.get_output_text())
+        # Check debug UART for output
+        initial_output_len = len(self.memory.uart.get_output_text())
         
         for i in range(max_steps):
             result = self.step(1)
             
             # Check if we have new output
-            current_output_len = len(self.memory.console_uart.get_output_text())
+            current_output_len = len(self.memory.uart.get_output_text())
             if current_output_len > initial_output_len:
                 return ExecutionResult('running', result.instruction_count, pc=self.cpu.pc)
             
@@ -238,7 +242,42 @@ class RV32System:
     
     # UART I/O methods
     
-    def uart_read(self):
+    # Debug UART (0x10000000) - TX only, typically used by printf/diagnostics
+    
+    def debug_uart_read(self):
+        """
+        Read any new debug UART TX output.
+        
+        Returns:
+            String of new output since last read
+        """
+        full_output = self.memory.uart.get_output_text()
+        new_output = full_output[self._debug_uart_read_pos:]
+        self._debug_uart_read_pos = len(full_output)
+        return new_output
+    
+    def debug_uart_read_all(self):
+        """
+        Read all debug UART TX output (including already-read data).
+        
+        Returns:
+            Complete output string
+        """
+        return self.memory.uart.get_output_text()
+    
+    def debug_uart_has_data(self):
+        """
+        Check if debug UART has new output.
+        
+        Returns:
+            True if there's unread output
+        """
+        full_output = self.memory.uart.get_output_text()
+        return len(full_output) > self._debug_uart_read_pos
+    
+    # Console UART (0x10001000) - TX/RX for interactive I/O
+    
+    def console_uart_read(self):
         """
         Read any new console UART TX output.
         
@@ -246,11 +285,11 @@ class RV32System:
             String of new output since last read
         """
         full_output = self.memory.console_uart.get_output_text()
-        new_output = full_output[self._uart_read_pos:]
-        self._uart_read_pos = len(full_output)
+        new_output = full_output[self._console_uart_read_pos:]
+        self._console_uart_read_pos = len(full_output)
         return new_output
     
-    def uart_read_all(self):
+    def console_uart_read_all(self):
         """
         Read all console UART TX output (including already-read data).
         
@@ -259,7 +298,7 @@ class RV32System:
         """
         return self.memory.console_uart.get_output_text()
     
-    def uart_write(self, data):
+    def console_uart_write(self, data):
         """
         Write data to console UART RX (simulator stdin).
         
@@ -269,11 +308,11 @@ class RV32System:
         if isinstance(data, str):
             data = data.encode('utf-8')
         
-        # Directly add to RX buffer for testing/programmatic control
+        # Directly add to RX buffer for programmatic control
         for byte in data:
             self.memory.console_uart.rx_buffer.append(byte)
     
-    def uart_has_data(self):
+    def console_uart_has_data(self):
         """
         Check if console UART has new output.
         
@@ -281,7 +320,25 @@ class RV32System:
             True if there's unread output
         """
         full_output = self.memory.console_uart.get_output_text()
-        return len(full_output) > self._uart_read_pos
+        return len(full_output) > self._console_uart_read_pos
+    
+    # Legacy/convenience methods - default to debug UART for backward compatibility
+    
+    def uart_read(self):
+        """Read from debug UART (legacy method)."""
+        return self.debug_uart_read()
+    
+    def uart_read_all(self):
+        """Read all from debug UART (legacy method)."""
+        return self.debug_uart_read_all()
+    
+    def uart_write(self, data):
+        """Write to console UART RX (legacy method)."""
+        return self.console_uart_write(data)
+    
+    def uart_has_data(self):
+        """Check debug UART has data (legacy method)."""
+        return self.debug_uart_has_data()
     
     # Register/Memory access
     

@@ -9,16 +9,18 @@
  * 
  * Target: RV32IM RISC-V emulator with 8MB RAM
  * libc: Picolibc 1.8.6-2
- * Terminal: ANSI_DEFAULT (hardcoded VT100 escape sequences)
- * Features: Minimal - TTY only, no save/load for now
+ * Terminal: ANSI terminal via UART
+ * System: Minimal UNIX-like environment
  */
 
 /* Define as Unix-like system */
 #define UNIX
 
-/* Prevent NetHack from redeclaring standard functions that picolibc provides */
-#define _POSIX_SOURCE
+/* Use POSIX types (picolibc provides these) */
 #define POSIX_TYPES
+
+/* Include ioctl support early to define TIOCGWINSZ */
+#include <sys/ioctl.h>
 
 /* Window system - TTY only with ANSI terminal */
 #define TTY_GRAPHICS

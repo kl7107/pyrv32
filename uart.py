@@ -134,18 +134,25 @@ class ConsoleUART:
     2. Direct mode: Uses stdin/stdout (for simple testing)
     """
     
-    def __init__(self, use_pty=False, save_output=True):
+    def __init__(self, use_pty=False, save_output=True, save_raw_output=None):
         """
         Initialize Console UART.
         
         Args:
             use_pty: If True, create a PTY. If False, use stdin/stdout.
             save_output: If True, buffer all TX output for display at end.
+            save_raw_output: If provided, save all TX bytes to this file path.
         """
         self.use_pty = use_pty
         self.save_output = save_output
         self.rx_buffer = bytearray()
         self.tx_buffer = bytearray() if save_output else None
+        self.save_raw_output = save_raw_output
+        self.raw_output_file = None
+        
+        if save_raw_output:
+            self.raw_output_file = open(save_raw_output, 'wb')
+            print(f"[Console UART] Saving raw TX output to: {save_raw_output}", file=sys.stderr)
         
         if use_pty:
             # Create PTY for terminal emulation
@@ -164,15 +171,24 @@ class ConsoleUART:
             print(f"[Console UART] PTY created: {self.slave_name}", file=sys.stderr)
             print(f"[Console UART] Connect with: screen {self.slave_name}", file=sys.stderr)
         else:
-            # Direct mode - use stdin (make non-blocking)
-            self.master_fd = sys.stdin.fileno()
-            flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
-            fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-            
-            print("[Console UART] Direct mode (stdin/stdout)", file=sys.stderr)
+            # Direct mode - only set up stdin if NOT in buffer-only mode
+            if not save_output:
+                # Use stdin (make non-blocking)
+                self.master_fd = sys.stdin.fileno()
+                flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
+                fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                print("[Console UART] Direct mode (stdin/stdout)", file=sys.stderr)
+            else:
+                # Buffer-only mode - no stdin/stdout interaction
+                self.master_fd = None
+                print("[Console UART] Buffer-only mode (headless)", file=sys.stderr)
     
     def _poll_input(self):
         """Poll for new input and add to RX buffer."""
+        if self.master_fd is None:
+            # Buffer-only mode - no input polling
+            return
+            
         try:
             if self.use_pty:
                 # Read from PTY
@@ -202,9 +218,16 @@ class ConsoleUART:
         if self.save_output and self.tx_buffer is not None:
             self.tx_buffer.append(value)
         
+        # Save raw output to file if enabled
+        if self.raw_output_file:
+            self.raw_output_file.write(byte_data)
+            self.raw_output_file.flush()
+        
         if self.use_pty:
             os.write(self.master_fd, byte_data)
-        else:
+        elif not self.save_output:
+            # Only write to stdout if we're NOT saving to buffer
+            # (if save_output=True, we're in headless/server mode)
             sys.stdout.buffer.write(byte_data)
             sys.stdout.buffer.flush()
     

@@ -54,7 +54,7 @@ class Memory:
     CONSOLE_UART_RX = CONSOLE_UART_RX_ADDR
     CONSOLE_UART_RX_STATUS = CONSOLE_UART_RX_STATUS_ADDR
     
-    def __init__(self, use_console_pty=False, save_console_output=True):
+    def __init__(self, use_console_pty=False, save_console_output=True, save_console_raw=None):
         """
         Initialize memory system.
         
@@ -62,6 +62,7 @@ class Memory:
             use_console_pty: If True, create PTY for Console UART. 
                            If False, use stdin/stdout (simpler for testing).
             save_console_output: If True, buffer Console UART output for display at end.
+            save_console_raw: If provided, save raw console TX bytes to this file path.
         """
         # Sparse memory - dict mapping address to byte value
         self.mem = {}
@@ -70,7 +71,8 @@ class Memory:
         self.uart = UART()
         
         # Console UART (TX/RX for user interaction)
-        self.console_uart = ConsoleUART(use_pty=use_console_pty, save_output=save_console_output)
+        self.console_uart = ConsoleUART(use_pty=use_console_pty, save_output=save_console_output,
+                                        save_raw_output=save_console_raw)
         
         # Memory watchpoints for debugging
         self.read_watchpoints = set()   # Addresses to watch for reads

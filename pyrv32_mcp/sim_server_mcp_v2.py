@@ -13,6 +13,7 @@ import os
 import asyncio
 import json
 from typing import Any, Optional
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,11 +27,24 @@ class MCPSimulatorServer:
     def __init__(self):
         self.session_manager = SessionManager()
         print(f"Session manager initialized: {id(self.session_manager)}")
+        
+        # Create log file for this server run
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_file = f"/tmp/mcp_server_{timestamp}.log"
+        self.log_fp = open(self.log_file, 'w')
+        print(f"MCP traffic logging to: {self.log_file}")
+        self._log(f"=== MCP Server Started at {timestamp} ===\n")
+    
+    def _log(self, message: str):
+        """Write message to log file and flush immediately."""
+        self.log_fp.write(message)
+        self.log_fp.flush()
     
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """Handle a single client connection using JSON-RPC over TCP."""
         addr = writer.get_extra_info('peername')
         print(f"Client connected: {addr}")
+        self._log(f"\n=== Client connected: {addr} ===\n")
         
         try:
             while True:
@@ -44,8 +58,16 @@ class MCPSimulatorServer:
                     method = request.get('method', 'unknown')
                     print(f"Request: {method}")
                     
+                    # Log received request
+                    timestamp = datetime.now().isoformat()
+                    self._log(f"\n>>> RECV [{timestamp}]: {json.dumps(request, indent=2)}\n")
+                    
                     # Handle the request
                     response = await self.handle_jsonrpc(request)
+                    
+                    # Log response
+                    timestamp = datetime.now().isoformat()
+                    self._log(f"\n<<< SEND [{timestamp}]: {json.dumps(response, indent=2)}\n")
                     
                     # Send response
                     response_json = json.dumps(response) + '\n'
@@ -58,6 +80,8 @@ class MCPSimulatorServer:
                         "error": {"code": -32700, "message": f"Parse error: {e}"},
                         "id": None
                     }
+                    timestamp = datetime.now().isoformat()
+                    self._log(f"\n<<< ERROR [{timestamp}]: {json.dumps(error_response, indent=2)}\n")
                     writer.write((json.dumps(error_response) + '\n').encode('utf-8'))
                     await writer.drain()
                     
@@ -67,6 +91,7 @@ class MCPSimulatorServer:
             traceback.print_exc()
         finally:
             print(f"Client disconnected: {addr}")
+            self._log(f"\n=== Client disconnected: {addr} ===\n")
             try:
                 writer.close()
                 await writer.wait_closed()
@@ -136,7 +161,7 @@ class MCPSimulatorServer:
                     "type": "object",
                     "properties": {
                         "start_addr": {"type": "string", "description": "Initial PC value in hex (default: 0x80000000)", "default": "0x80000000"},
-                        "fs_root": {"type": "string", "description": "Root directory for filesystem syscalls (default: '.')", "default": "."}
+                        "fs_root": {"type": "string", "description": "Root directory for filesystem syscalls (default: 'pyrv32_sim_fs')", "default": "pyrv32_sim_fs"}
                     }
                 }
             },
@@ -216,8 +241,8 @@ class MCPSimulatorServer:
                 }
             },
             {
-                "name": "sim_uart_read",
-                "description": "Read available UART output from simulator.",
+                "name": "sim_debug_uart_read",
+                "description": "Read available debug UART (0x10000000) output from simulator.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
@@ -225,20 +250,38 @@ class MCPSimulatorServer:
                 }
             },
             {
-                "name": "sim_uart_write",
-                "description": "Write data to UART input.",
+                "name": "sim_debug_uart_has_data",
+                "description": "Check if debug UART has new output data available.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_console_uart_read",
+                "description": "Read available console UART (0x10001000) TX output from simulator.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_console_uart_write",
+                "description": "Write data to console UART (0x10001000) RX input.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "Session identifier"},
-                        "data": {"type": "string", "description": "Data to write"}
+                        "data": {"type": "string", "description": "Data to write to UART RX"}
                     },
                     "required": ["session_id", "data"]
                 }
             },
             {
-                "name": "sim_uart_has_data",
-                "description": "Check if UART has output data available.",
+                "name": "sim_console_uart_has_data",
+                "description": "Check if console UART has new output data available.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
@@ -346,7 +389,7 @@ class MCPSimulatorServer:
             # Session management
             if name == "sim_create":
                 start_addr = int(arguments.get("start_addr", "0x80000000"), 16)
-                fs_root = arguments.get("fs_root", ".")
+                fs_root = arguments.get("fs_root", "pyrv32_sim_fs")
                 session_id = self.session_manager.create_session(start_addr, fs_root)
                 return [{"type": "text", "text": f"Created session: {session_id}"}]
             
@@ -400,17 +443,25 @@ class MCPSimulatorServer:
                 text = f"PC: 0x{status['pc']:08x}\nInstructions: {status['instruction_count']}\nHalted: {status['halted']}\nUART has data: {status['uart_has_data']}"
                 return [{"type": "text", "text": text}]
             
-            # UART
-            elif name == "sim_uart_read":
-                data = session.uart_read()
+            # Debug UART
+            elif name == "sim_debug_uart_read":
+                data = session.debug_uart_read()
                 return [{"type": "text", "text": data}]
             
-            elif name == "sim_uart_write":
-                session.uart_write(arguments["data"])
-                return [{"type": "text", "text": "Data written to UART"}]
+            elif name == "sim_debug_uart_has_data":
+                has_data = session.debug_uart_has_data()
+                return [{"type": "text", "text": str(has_data)}]
             
-            elif name == "sim_uart_has_data":
-                has_data = session.uart_has_data()
+            elif name == "sim_console_uart_read":
+                data = session.console_uart_read()
+                return [{"type": "text", "text": data}]
+            
+            elif name == "sim_console_uart_write":
+                session.console_uart_write(arguments["data"])
+                return [{"type": "text", "text": "Data written to console UART RX"}]
+            
+            elif name == "sim_console_uart_has_data":
+                has_data = session.console_uart_has_data()
                 return [{"type": "text", "text": str(has_data)}]
             
             # Registers
