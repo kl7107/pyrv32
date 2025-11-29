@@ -40,7 +40,7 @@ struct ltchars ltchars0 = { -1, -1, -1, -1, -1, -1 }; /* turn all off */
 # ifdef POSIX_TYPES
 #include <termios.h>
 struct termios termio;
-#  if defined(BSD) || defined(_AIX32)
+#  if defined(BSD) || defined(_AIX32) || defined(PYRV32)
 #   if defined(_AIX32) && !defined(_ALL_SOURCE)
 #    define _ALL_SOURCE
 #   endif
@@ -63,7 +63,7 @@ struct termio termio;
 #include	<signal.h>
 #endif
 
-#if defined(TIOCGWINSZ) && (defined(BSD) || defined(ULTRIX) || defined(AIX_31) || defined(_BULL_SOURCE) || defined(SVR4))
+#if defined(TIOCGWINSZ) && (defined(BSD) || defined(ULTRIX) || defined(AIX_31) || defined(_BULL_SOURCE) || defined(SVR4) || defined(PYRV32))
 #define USE_WIN_IOCTL
 #include "tcap.h"	/* for LI and CO */
 #endif

@@ -32,9 +32,11 @@
 
 
 /* define any of the following that are appropriate */
-#define SVR4		/* use in addition to SYSV for System V Release 4 */
+#ifndef PYRV32  /* PyRV32: picolibc doesn't match SVR4 fully */
+# define SVR4		/* use in addition to SYSV for System V Release 4 */
 			/* including Solaris 2+ */
-#define NETWORK		/* if running on a networked system */
+#endif
+/* #define NETWORK */		/* if running on a networked system */
 			/* e.g. Suns sharing a playground through NFS */
 /* #define SUNOS4 */	/* SunOS 4.x */
 /* #define LINUX */	/* Another Unix clone */
@@ -47,17 +49,21 @@
 			 * job control (note that AIX is SYSV otherwise)
 			 * Also define this for AIX 3.2 */
 
-#define TERMINFO	/* uses terminfo rather than termcap */
+#ifndef PYRV32  /* PyRV32: Use ANSI_DEFAULT, not terminfo */
+# define TERMINFO	/* uses terminfo rather than termcap */
 			/* Should be defined for most SYSV, SVR4 (including
 			 * Solaris 2+), HPUX, and Linux systems.  In
 			 * particular, it should NOT be defined for the UNIXPC
 			 * unless you remove the use of the shared library in
 			 * the Makefile */
-#define TEXTCOLOR	/* Use System V r3.2 terminfo color support */
+#endif
+/* #define TEXTCOLOR */	/* Use System V r3.2 terminfo color support */
 			/* and/or ANSI color support on termcap systems */
 			/* and/or X11 color */
-#define POSIX_JOB_CONTROL /* use System V / Solaris 2.x / POSIX job control */
+#ifndef PYRV32  /* PyRV32: No job control */
+# define POSIX_JOB_CONTROL /* use System V / Solaris 2.x / POSIX job control */
 			/* (e.g., VSUSP) */
+#endif
 #define POSIX_TYPES	/* use POSIX types for system calls and termios */
 			/* Define for many recent OS releases, including
 			 * those with specific defines (since types are
@@ -132,7 +138,9 @@
  * "extra output" method is used, but not all systems provide access to
  * a fine-grained timer.
  */
-/* #define TIMED_DELAY */	/* usleep() */
+#ifndef PYRV32  /* PyRV32: No precise timing available */
+# define TIMED_DELAY	/* usleep() */
+#endif
 #endif
 
 /*
@@ -143,7 +151,9 @@
  * A stat system call is done on the mailbox every MAILCKFREQ moves.
  */
 
-#define MAIL			/* Deliver mail during the game */
+#ifndef PYRV32  /* PyRV32: No mail (requires getpwuid, stat) */
+# define MAIL			/* Deliver mail during the game */
+#endif
 
 /* The Andrew Message System does mail a little differently from normal
  * UNIX.  Mail is deposited in the user's own directory in ~/Mailbox
@@ -270,7 +280,9 @@
 #endif
 #define tgetch getchar
 
-#define SHELL		/* do not delete the '!' command */
+#ifndef PYRV32  /* PyRV32: No shell (requires fork, exec) */
+# define SHELL		/* do not delete the '!' command */
+#endif
 
 #include "system.h"
 

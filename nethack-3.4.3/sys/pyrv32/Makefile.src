@@ -18,8 +18,12 @@ ARCH_FLAGS = -march=rv32im -mabi=ilp32
 PICOLIBC_INC = /usr/lib/picolibc/riscv64-unknown-elf/include
 PICOLIBC_LIB = /usr/lib/picolibc/riscv64-unknown-elf/lib/rv32im/ilp32
 
+# Platform firmware include path (OS-level headers)
+PLATFORM_INC = ../../firmware/include
+
 # Compiler flags
 CFLAGS = $(ARCH_FLAGS) -O2 -g -Wall \
+	-I$(PLATFORM_INC) \
 	-isystem $(PICOLIBC_INC) \
 	-I../sys/pyrv32/include \
 	-I../include -I../sys/pyrv32 \
@@ -29,8 +33,8 @@ CFLAGS = $(ARCH_FLAGS) -O2 -g -Wall \
 # Automatic dependency generation flags
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
-# Linker script and flags
-LINKER_SCRIPT = ../sys/pyrv32/link.ld
+# Linker script (shared from firmware) and flags
+LINKER_SCRIPT = $(FIRMWARE_PATH)/link.ld
 LDFLAGS = $(ARCH_FLAGS) \
 	-T$(LINKER_SCRIPT) \
 	-L$(PICOLIBC_LIB) \
@@ -44,18 +48,19 @@ LIBS = -lc -lgcc
 # Game name
 GAME = nethack
 
-# System source files for PyRV32 (Unix-like, but no ioctl.c - we use ANSI_DEFAULT)
-SYSSRC = ../sys/share/unixtty.c ../sys/unix/unixmain.c \
+# System source files for PyRV32 (Unix-like with ioctl support)
+SYSSRC = ../sys/share/unixtty.c ../sys/share/ioctl.c ../sys/unix/unixmain.c \
 	../sys/unix/unixunix.c ../sys/unix/unixres.c
-SYSOBJ = unixmain.o unixtty.o unixunix.o unixres.o
+SYSOBJ = unixmain.o unixtty.o ioctl.o unixunix.o unixres.o
 
 # Window source files (TTY only)
 WINSRC = ../win/tty/getline.c ../win/tty/termcap.c ../win/tty/topl.c \
 	../win/tty/wintty.c
 WINOBJ = getline.o termcap.o topl.o wintty.o
 
-# Runtime objects (from parent directory)
-RUNTIME_OBJS = ../crt0.o ../syscalls.o
+# Runtime objects (from firmware directory - built separately)
+FIRMWARE_PATH = ../../firmware
+RUNTIME_OBJS = $(FIRMWARE_PATH)/crt0.o $(FIRMWARE_PATH)/syscalls.o
 
 # Random number generator (not needed - using picolibc)
 RANDOBJ =
@@ -169,6 +174,9 @@ version.o: version.c ../include/date.h
 unixtty.o: ../sys/share/unixtty.c
 	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
+ioctl.o: ../sys/share/ioctl.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
+
 unixmain.o: ../sys/unix/unixmain.c
 	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
@@ -191,14 +199,11 @@ topl.o: ../win/tty/topl.c
 wintty.o: ../win/tty/wintty.c
 	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
-# Runtime objects (follow symlinks to build from master firmware/ copies)
-../crt0.o: ../sys/pyrv32/crt0.S
-	$(CC) -march=rv32im -mabi=ilp32 -c -o $@ $<
-
-../syscalls.o: ../sys/pyrv32/syscalls.c
-	$(CC) -march=rv32im -mabi=ilp32 -O2 -g \
-		-isystem /usr/lib/picolibc/riscv64-unknown-elf/include \
-		-I../include -I../sys/pyrv32 -c -o $@ $<
+# Runtime objects (built in firmware directory)
+$(FIRMWARE_PATH)/crt0.o $(FIRMWARE_PATH)/syscalls.o:
+	@echo "ERROR: Runtime objects not found in $(FIRMWARE_PATH)/"
+	@echo "Please build crt0.o and syscalls.o in the firmware directory first."
+	@exit 1
 
 # Generic rule for .c -> .o (with automatic dependency generation)
 .c.o:
@@ -209,7 +214,3 @@ wintty.o: ../win/tty/wintty.c
 
 clean:
 	rm -f *.o *.d $(GAME).elf $(GAME).bin $(GAME).map
-
-install: $(GAME).bin
-	cp $(GAME).bin ../../firmware/
-	@echo "Installed to ../../firmware/$(GAME).bin"

@@ -5,11 +5,6 @@
 #ifndef CONFIG_H /* make sure the compiler does not see the typedefs twice */
 #define CONFIG_H
 
-/* PyRV32 port: include pyrv32conf.h which includes unixconf.h */
-#ifdef PYRV32
-#include "pyrv32conf.h"
-#endif
-
 /*
  * Section 1:	Operating and window systems selection.
  *		Select the version of the OS you are using.
@@ -18,9 +13,7 @@
  *		provide it (no need to change sec#1, vmsconf.h handles it).
  */
 
-#ifndef PYRV32
 #define UNIX		/* delete if no fork(), exec() available */
-#endif
 
 /* #define MSDOS */	/* in case it's not auto-detected */
 
@@ -53,6 +46,11 @@
 /* #define QT_GRAPHICS */	/* Qt interface */
 /* #define GNOME_GRAPHICS */	/* Gnome interface */
 /* #define MSWIN_GRAPHICS */	/* Windows NT, CE, Graphics */
+
+/* PyRV32: Use ANSI terminal control (no termcap/terminfo library) */
+#ifdef PYRV32
+# define ANSI_DEFAULT
+#endif
 
 /*
  * Define the default window system.  This should be one that is compiled
@@ -149,16 +147,23 @@
 
 #ifndef WIZARD		/* allow for compile-time or Makefile changes */
 # ifndef KR1ED
-#  define WIZARD  "wizard" /* the person allowed to use the -D option */
+#  ifndef PYRV32	/* PyRV32: No wizard mode (simplified build) */
+#   define WIZARD  "wizard" /* the person allowed to use the -D option */
+#  endif
 # else
 #  define WIZARD
 #  define WIZARD_NAME "wizard"
 # endif
 #endif
 
-#define LOGFILE "logfile"	/* larger file for debugging purposes */
-#define NEWS "news"		/* the file containing the latest hack news */
-#define PANICLOG "paniclog"	/* log of panic and impossible events */
+/* PyRV32: Disable file-based logging (Phase 1 - minimal I/O) */
+#ifdef PYRV32
+# /* No LOGFILE, NEWS, or PANICLOG for minimal build */
+#else
+# define LOGFILE "logfile"	/* larger file for debugging purposes */
+# define NEWS "news"		/* the file containing the latest hack news */
+# define PANICLOG "paniclog"	/* log of panic and impossible events */
+#endif
 
 /*
  *	If COMPRESS is defined, it should contain the full path name of your
@@ -173,7 +178,7 @@
  *	compression.
  */
 
-#ifdef UNIX
+#if defined(UNIX) && !defined(PYRV32)
 /* path and file name extension for compression program */
 #define COMPRESS "/usr/bin/compress"	/* Lempel-Ziv compression */
 #define COMPRESS_EXTENSION ".Z"		/* compress's extension */
@@ -198,7 +203,7 @@
  *	died due to program or system crashes to be resumed from the point
  *	of the last level change, after running a utility program.
  */
-#define INSURANCE	/* allow crashed game recovery */
+/* #define INSURANCE */	/* allow crashed game recovery */
 
 #ifndef MAC
 # define CHDIR		/* delete if no chdir() available */
@@ -354,8 +359,8 @@ typedef unsigned char	uchar;
  * bugs left here.
  */
 
-/*#define GOLDOBJ */	/* Gold is kept on obj chains - Helge Hafting */
-/*#define AUTOPICKUP_EXCEPTIONS */ /* exceptions to autopickup */
+#define GOLDOBJ /* Gold is kept on obj chains - Helge Hafting */
+#define AUTOPICKUP_EXCEPTIONS /* exceptions to autopickup */
 
 /* End of Section 5 */
 

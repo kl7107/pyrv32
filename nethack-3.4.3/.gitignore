@@ -1,2 +1,5 @@
 include/date.h
 util/makedefs
+Makefile
+src/Makefile
+util/Makefile

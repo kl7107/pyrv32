@@ -1,1 +1,0 @@
-../../../firmware/crt0.S
