@@ -8,5 +8,8 @@ __pycache__/
 *.bin
 *.o
 *.lst
+*.elf
+*.map
+*.d
 
 pyrv32_sim_fs/

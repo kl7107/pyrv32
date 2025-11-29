@@ -194,6 +194,8 @@ generated-files: ../include/pm.h ../include/onames.h ../include/date.h \
 	./makedefs -o
 ../include/pm.h: makedefs
 	./makedefs -p
+../include/date.h: makedefs
+	./makedefs -V
 ../src/monstr.c: makedefs
 	./makedefs -m
 ../include/vis_tab.h: makedefs
@@ -207,8 +209,7 @@ lintdefs:
 
 # we defer this makedefs call to the src Makefile, since it knows all about
 # the main src and include files date.h is a timestamp for
-../include/date.h::
-	@( cd ../src ; $(MAKE) ../include/date.h )
+# REMOVED - we generate it directly with makedefs -V above
 
 # support code used by several of the utility programs (but not makedefs)
 panic.o: panic.c

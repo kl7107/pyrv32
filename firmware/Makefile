@@ -1,6 +1,7 @@
 # Makefile for RV32IM firmware examples
+# Supports both standalone and libc-linked programs with automatic detection
 
-# Toolchain configuration
+# Toolchain
 PREFIX = riscv64-unknown-elf
 CC = $(PREFIX)-gcc
 OBJCOPY = $(PREFIX)-objcopy
@@ -12,196 +13,179 @@ ARCH_FLAGS = -march=rv32im -mabi=ilp32
 OPT_FLAGS = -O2 -g
 WARN_FLAGS = -Wall -Wextra
 
-# Picolibc paths (smaller, modern embedded libc)
+# Picolibc configuration
 PICOLIBC_INC = /usr/lib/picolibc/riscv64-unknown-elf/include
 PICOLIBC_LIB = /usr/lib/picolibc/riscv64-unknown-elf/lib/rv32im/ilp32
-
-# Platform include path (OS-level headers like sys/ioctl.h)
 PLATFORM_INC = include
 
-# Flags for programs using picolibc
-NEWLIB_CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) -I$(PLATFORM_INC) -isystem $(PICOLIBC_INC)
-NEWLIB_LDFLAGS = -T link.ld -L$(PICOLIBC_LIB) -Wl,--gc-sections -nostartfiles -nodefaultlibs
+# Base flags
+BASE_CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) -I$(PLATFORM_INC)
 
 # Flags for standalone programs (no libc)
-STANDALONE_FLAGS = -nostdlib -nostartfiles -ffreestanding -fno-builtin -fno-stack-protector
+STANDALONE_CFLAGS = $(BASE_CFLAGS) -nostdlib -nostartfiles -ffreestanding -fno-builtin -fno-stack-protector
+STANDALONE_LDFLAGS = -T link.ld -nostdlib -nostartfiles -Wl,--gc-sections
 
-CFLAGS = $(ARCH_FLAGS) $(OPT_FLAGS) $(WARN_FLAGS) $(STANDALONE_FLAGS)
+# Flags for libc-linked programs
+LIBC_CFLAGS = $(BASE_CFLAGS) -isystem $(PICOLIBC_INC)
+LIBC_LDFLAGS = -T link.ld -L$(PICOLIBC_LIB) -Wl,--gc-sections -nostartfiles -nodefaultlibs
 
-# Linker flags
-LDFLAGS = -T link.ld -nostdlib -nostartfiles -Wl,--gc-sections
+# Programs that need libc (auto-detected by name patterns)
+LIBC_PROGRAMS = printf_test libc_test clock_test tls_test
+STANDALONE_PROGRAMS = hello fibonacci echo_test timer_test bad_pointer bad_store bad_uart_offset interpreter_test
 
-# Default program
-PROGRAM = hello
-SOURCES = crt0.S runtime.c $(PROGRAM).c
+# Special multi-file programs
+DHRYSTONE_SOURCES = dhry_1.c dhry_2.c
 
-# Dhrystone benchmark
-DHRYSTONE_SOURCES = crt0.S runtime.c dhry_1.c dhry_2.c
+# Runtime components
+RUNTIME_OBJS = crt0.o runtime.o
 
-# Output files
-ELF = $(PROGRAM).elf
-BIN = $(PROGRAM).bin
-LST = $(PROGRAM).lst
-MAP = $(PROGRAM).map
+.PHONY: all runtime clean list help run
+.PRECIOUS: %.elf %.bin %.lst
 
-.PHONY: all clean run run-verbose disasm size syscalls.o crt0.o
+#==============================================================================
+# Default target: build all programs
+#==============================================================================
+ALL_PROGRAMS = $(STANDALONE_PROGRAMS) $(LIBC_PROGRAMS) dhrystone
 
-# Object files for external use (tests, etc)
-syscalls.o: syscalls.c
-	$(CC) $(NEWLIB_CFLAGS) -c -o $@ $<
+all: runtime $(addsuffix .bin,$(STANDALONE_PROGRAMS) $(LIBC_PROGRAMS)) dhrystone.bin
+	@echo ""
+	@echo "=========================================="
+	@echo "✓ All programs built successfully!"
+	@echo "=========================================="
+	@echo ""
+	@echo "Standalone programs:"
+	@for prog in $(STANDALONE_PROGRAMS); do \
+		size=$$(ls -lh $$prog.bin 2>/dev/null | awk '{print $$5}'); \
+		echo "  $$prog.bin ($$size)"; \
+	done
+	@echo ""
+	@echo "Programs with libc:"
+	@for prog in $(LIBC_PROGRAMS); do \
+		size=$$(ls -lh $$prog.bin 2>/dev/null | awk '{print $$5}'); \
+		echo "  $$prog.bin ($$size)"; \
+	done
+	@echo ""
+	@echo "Benchmarks:"
+	@size=$$(ls -lh dhrystone.bin 2>/dev/null | awk '{print $$5}'); \
+	echo "  dhrystone.bin ($$size)"
+	@echo ""
+
+#==============================================================================
+# Runtime components (for NetHack and other external builds)
+#==============================================================================
+runtime: crt0.o runtime.o syscalls.o
 
 crt0.o: crt0.S
+	@echo "Building crt0.o..."
 	$(CC) $(ARCH_FLAGS) -c -o $@ $<
 
-all: $(BIN) $(LST)
+runtime.o: runtime.c
+	@echo "Building runtime.o..."
+	$(CC) $(STANDALONE_CFLAGS) -c -o $@ $<
+
+syscalls.o: syscalls.c
+	@echo "Building syscalls.o..."
+	$(CC) $(LIBC_CFLAGS) -c -o $@ $<
+
+#==============================================================================
+# Pattern rules for standalone programs
+#==============================================================================
+$(STANDALONE_PROGRAMS): %: %.bin
 	@echo ""
-	@echo "✓ Build complete: $(BIN)"
-	@$(SIZE) $(ELF)
+	@echo "✓ Build complete: $@.bin"
+	@$(SIZE) $@.elf
 
-$(ELF): $(SOURCES) link.ld
-	@echo "Building $(PROGRAM)..."
-	$(CC) $(CFLAGS) $(LDFLAGS) -Wl,-Map=$(MAP) $(SOURCES) -o $@
+%.elf: %.c crt0.o runtime.o link.ld
+	@echo "Linking $@ (standalone)..."
+	$(CC) $(STANDALONE_CFLAGS) $(STANDALONE_LDFLAGS) -Wl,-Map=$*.map \
+		crt0.o runtime.o $< -o $@
 
-$(BIN): $(ELF)
+#==============================================================================
+# Pattern rules for libc programs
+#==============================================================================
+$(LIBC_PROGRAMS): %: %.bin
+	@echo ""
+	@echo "✓ Build complete: $@.bin"
+	@$(SIZE) $@.elf
+
+$(foreach prog,$(LIBC_PROGRAMS),$(prog).elf): %.elf: %.c crt0.o runtime.o syscalls.o link.ld
+	@echo "Linking $@ (with libc)..."
+	$(CC) $(LIBC_CFLAGS) $(LIBC_LDFLAGS) -Wl,-Map=$*.map \
+		crt0.o runtime.o syscalls.o $< -o $@ -lc -lgcc
+
+#==============================================================================
+# Special programs
+#==============================================================================
+dhrystone: dhrystone.bin
+	@echo ""
+	@echo "✓ Dhrystone benchmark complete"
+	@$(SIZE) dhrystone.elf
+
+dhrystone.elf: $(DHRYSTONE_SOURCES) crt0.o runtime.o link.ld
+	@echo "Linking dhrystone.elf (standalone)..."
+	$(CC) $(STANDALONE_CFLAGS) $(STANDALONE_LDFLAGS) -Wl,-Map=dhrystone.map \
+		crt0.o runtime.o $(DHRYSTONE_SOURCES) -o $@
+
+#==============================================================================
+# Generic binary generation and disassembly
+#==============================================================================
+%.bin: %.elf
+	@echo "Creating binary: $@"
 	$(OBJCOPY) -O binary $< $@
 
-$(LST): $(ELF)
+%.lst: %.elf
+	@echo "Generating disassembly: $@"
 	$(OBJDUMP) -d -S $< > $@
 
-size: $(ELF)
-	$(SIZE) $(ELF)
+#==============================================================================
+# Utility targets
+#==============================================================================
+list:
+	@echo "Available programs:"
 	@echo ""
-	@ls -lh $(BIN) | awk '{print "Binary size:", $$5}'
+	@echo "Standalone (no libc):"
+	@for prog in $(STANDALONE_PROGRAMS); do echo "  make $$prog"; done
+	@echo ""
+	@echo "With libc:"
+	@for prog in $(LIBC_PROGRAMS); do echo "  make $$prog"; done
+	@echo ""
+	@echo "Special:"
+	@echo "  make dhrystone"
+	@echo ""
+	@echo "Run any program:"
+	@echo "  make run PROG=<name>"
 
-disasm: $(LST)
-	less $(LST)
-
-run: $(BIN)
-	cd .. && ./pyrv32.py --no-test firmware/$(BIN)
-
-run-verbose: $(BIN)
-	cd .. && ./pyrv32.py --no-test -v firmware/$(BIN)
+run:
+ifndef PROG
+	@echo "Usage: make run PROG=<program>"
+	@echo "Example: make run PROG=hello"
+else
+	@$(MAKE) --no-print-directory $(PROG)
+	@echo ""
+	@echo "Running $(PROG)..."
+	@echo "========================================"
+	cd .. && ./pyrv32.py firmware/$(PROG).bin
+endif
 
 clean:
+	@echo "Cleaning build artifacts..."
 	rm -f *.elf *.bin *.lst *.map *.o
 
 help:
 	@echo "RV32IM Firmware Build System"
+	@echo "============================="
 	@echo ""
-	@echo "Targets:"
-	@echo "  make              - Build firmware (default)"
-	@echo "  make run          - Build and run on emulator"
-	@echo "  make run-verbose  - Build and run with instruction trace"
-	@echo "  make size         - Show size information"
-	@echo "  make disasm       - View disassembly"
-	@echo "  make clean        - Remove build artifacts"
-	@echo "  make dhrystone    - Build and run Dhrystone benchmark"
-	@echo "  make printf_test  - Build and run printf/newlib test"
+	@echo "Quick start:"
+	@echo "  make              - Build all programs"
+	@echo "  make runtime      - Build only runtime components (crt0.o, runtime.o, syscalls.o)"
+	@echo "  make list         - Show all available programs"
+	@echo "  make hello        - Build specific program"
+	@echo "  make run PROG=hello - Build and run a program"
+	@echo "  make clean        - Remove all build artifacts"
 	@echo ""
-	@echo "To build a different program:"
-	@echo "  make PROGRAM=myprogram"
-	@echo "  make PROGRAM=myprogram run"
-
-# Dhrystone benchmark
-dhrystone:
-	@$(MAKE) clean
-	$(CC) $(CFLAGS) $(LDFLAGS) -Wl,-Map=dhrystone.map $(DHRYSTONE_SOURCES) -o dhrystone.elf
-	$(OBJCOPY) -O binary dhrystone.elf dhrystone.bin
-	$(OBJDUMP) -d -S dhrystone.elf > dhrystone.lst
+	@echo "Examples:"
+	@echo "  make printf_test  - Build printf test (auto-links with libc)"
+	@echo "  make fibonacci    - Build fibonacci (standalone)"
+	@echo "  make dhrystone    - Build Dhrystone benchmark"
 	@echo ""
-	@echo "✓ Dhrystone build complete"
-	@$(SIZE) dhrystone.elf
-	@echo ""
-	@echo "Running Dhrystone benchmark..."
-	@echo ""
-	cd .. && ./pyrv32.py --no-test firmware/dhrystone.bin
-
-# Printf test with picolibc
-printf_test:
-	@$(MAKE) clean
-	$(CC) $(NEWLIB_CFLAGS) $(NEWLIB_LDFLAGS) -Wl,-Map=printf_test.map \
-		crt0.S runtime.c syscalls.c printf_test.c -lc -lgcc -o printf_test.elf
-	$(OBJCOPY) -O binary printf_test.elf printf_test.bin
-	$(OBJDUMP) -d -S printf_test.elf > printf_test.lst
-	@echo ""
-	@echo "✓ Printf test build complete"
-	@$(SIZE) printf_test.elf
-	@echo ""
-	@echo "Running printf test..."
-	@echo ""
-	cd .. && python3 pyrv32.py firmware/printf_test.bin
-
-# Comprehensive libc test for NetHack requirements
-libc_test:
-	@$(MAKE) clean
-	$(CC) $(NEWLIB_CFLAGS) $(NEWLIB_LDFLAGS) -Wl,-Map=libc_test.map \
-		crt0.S runtime.c syscalls.c libc_test.c -lc -lgcc -o libc_test.elf
-	$(OBJCOPY) -O binary libc_test.elf libc_test.bin
-	$(OBJDUMP) -d -S libc_test.elf > libc_test.lst
-	@echo ""
-	@echo "✓ libc test build complete"
-	@$(SIZE) libc_test.elf
-	@echo ""
-	@echo "Running libc test..."
-	@echo ""
-	cd .. && python3 pyrv32.py firmware/libc_test.bin
-
-# Quick qsort debug test
-qsort_test:
-	@$(MAKE) clean
-	$(CC) $(NEWLIB_CFLAGS) $(NEWLIB_LDFLAGS) -Wl,-Map=qsort_test.map \
-		crt0.S runtime.c syscalls.c qsort_test.c -lc -lgcc -o qsort_test.elf
-	$(OBJCOPY) -O binary qsort_test.elf qsort_test.bin
-	$(OBJDUMP) -d -S qsort_test.elf > qsort_test.lst
-	@echo ""
-	@echo "✓ qsort test build complete"
-	@$(SIZE) qsort_test.elf
-	@echo ""
-	@echo "Running qsort test..."
-	@echo ""
-	cd .. && python3 pyrv32.py firmware/qsort_test.bin
-
-# rand/srand TLS investigation
-rand_test:
-	@$(MAKE) clean
-	$(CC) $(NEWLIB_CFLAGS) $(NEWLIB_LDFLAGS) -Wl,-Map=rand_test.map \
-		crt0.S runtime.c syscalls.c rand_test.c -lc -lgcc -o rand_test.elf
-	$(OBJCOPY) -O binary rand_test.elf rand_test.bin
-	$(OBJDUMP) -d -S rand_test.elf > rand_test.lst
-	@echo ""
-	@echo "✓ rand test build complete"
-	@$(SIZE) rand_test.elf
-	@echo ""
-	@echo "Running rand test..."
-	@echo ""
-	cd .. && python3 pyrv32.py firmware/rand_test.bin
-
-# Comprehensive TLS test
-tls_test:
-	@$(MAKE) clean
-	$(CC) $(NEWLIB_CFLAGS) $(NEWLIB_LDFLAGS) -Wl,-Map=tls_test.map \
-		crt0.S runtime.c syscalls.c tls_test.c -lc -lgcc -o tls_test.elf
-	$(OBJCOPY) -O binary tls_test.elf tls_test.bin
-	$(OBJDUMP) -d -S tls_test.elf > tls_test.lst
-	@echo ""
-	@echo "✓ TLS test build complete"
-	@$(SIZE) tls_test.elf
-	@echo ""
-	@echo "Running TLS test..."
-	@echo ""
-	cd .. && python3 pyrv32.py firmware/tls_test.bin
-
-# Real-time clock test
-clock_test:
-	@$(MAKE) clean
-	$(CC) $(NEWLIB_CFLAGS) $(NEWLIB_LDFLAGS) -Wl,-Map=clock_test.map \
-		crt0.S runtime.c syscalls.c clock_test.c -lc -lgcc -o clock_test.elf
-	$(OBJCOPY) -O binary clock_test.elf clock_test.bin
-	$(OBJDUMP) -d -S clock_test.elf > clock_test.lst
-	@echo ""
-	@echo "✓ Clock test build complete"
-	@$(SIZE) clock_test.elf
-	@echo ""
-	@echo "Running clock test..."
-	@echo ""
-	cd .. && python3 pyrv32.py firmware/clock_test.bin
+	@echo "The Makefile automatically detects which programs need libc."

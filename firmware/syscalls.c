@@ -898,9 +898,6 @@ int kill(pid_t pid, int sig) {
     return -1;
 }
 
-/* Termcap variables (for ANSI_DEFAULT mode) */
-short ospeed = 0;  /* Baud rate (not used in ANSI_DEFAULT) */
-
 /* Termcap function stubs */
 int tputs(const char *str, int affcnt, int (*putc_func)(int)) {
     /* In ANSI_DEFAULT mode, just output the string directly */
