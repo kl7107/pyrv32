@@ -30,7 +30,7 @@ LIBC_CFLAGS = $(BASE_CFLAGS) -isystem $(PICOLIBC_INC)
 LIBC_LDFLAGS = -T link.ld -L$(PICOLIBC_LIB) -Wl,--gc-sections -nostartfiles -nodefaultlibs
 
 # Programs that need libc (auto-detected by name patterns)
-LIBC_PROGRAMS = printf_test libc_test clock_test tls_test
+LIBC_PROGRAMS = printf_test libc_test clock_test tls_test test_file_syscalls
 STANDALONE_PROGRAMS = hello fibonacci echo_test timer_test bad_pointer bad_store bad_uart_offset interpreter_test
 
 # Special multi-file programs

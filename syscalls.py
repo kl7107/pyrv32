@@ -18,6 +18,7 @@ import struct
 # Linux RV32 syscall numbers (from Linux kernel arch/riscv/include/uapi/asm/unistd.h)
 SYS_GETCWD = 17
 SYS_UNLINKAT = 35
+SYS_LINKAT = 37
 SYS_RENAMEAT = 38
 SYS_FACCESSAT = 48
 SYS_CHDIR = 49
@@ -85,6 +86,7 @@ class SyscallHandler:
             SYS_FSTAT: self._sys_fstat,
             SYS_FACCESSAT: self._sys_faccessat,
             SYS_UNLINKAT: self._sys_unlinkat,
+            SYS_LINKAT: self._sys_linkat,
             SYS_RENAMEAT: self._sys_renameat,
             SYS_EXIT: self._sys_exit,
             SYS_EXIT_GROUP: self._sys_exit_group,
@@ -95,8 +97,12 @@ class SyscallHandler:
             result = handler(cpu, memory)
             cpu.regs[10] = result & 0xFFFFFFFF  # a0 = return value
         else:
-            # Unsupported syscall - return -ENOSYS
-            cpu.regs[10] = self._neg_errno(errno.ENOSYS)
+            # Unsupported syscall - raise exception to break execution
+            from exceptions import EBreakException
+            raise EBreakException(
+                cpu.pc,
+                f"Unsupported syscall {syscall_num} (a0={cpu.regs[10]:08x}, a1={cpu.regs[11]:08x}, a2={cpu.regs[12]:08x})"
+            )
     
     # Helper methods
     
@@ -173,11 +179,15 @@ class SyscallHandler:
         Convert simulated absolute path to host path.
         
         Args:
-            sim_path: Simulated path (e.g., "/nethack/save")
+            sim_path: Simulated path (e.g., "/nethack/save" or "file.txt")
             
         Returns:
             Host path (e.g., "./pyrv32-fs/nethack/save")
         """
+        # Handle relative paths by joining with cwd first
+        if not sim_path.startswith('/'):
+            sim_path = os.path.join(self.cwd, sim_path)
+        
         # Remove leading slash
         if sim_path.startswith('/'):
             sim_path = sim_path[1:]
@@ -187,6 +197,7 @@ class SyscallHandler:
         
         # Ensure path stays within fs_root (prevent escapes)
         host_path = os.path.abspath(host_path)
+        
         if not host_path.startswith(self.fs_root):
             # Path escape attempt - treat as EACCES
             return None
@@ -580,6 +591,50 @@ class SyscallHandler:
                 os.rmdir(host_path)
             else:
                 os.unlink(host_path)
+            return 0
+        except OSError as e:
+            return self._neg_errno(e.errno)
+    
+    def _sys_linkat(self, cpu, memory):
+        """
+        linkat(olddirfd, oldpath, newdirfd, newpath, flags) - Create hard link
+        
+        Args:
+            a0: olddirfd
+            a1: oldpath address
+            a2: newdirfd
+            a3: newpath address
+            a4: flags
+            
+        Returns:
+            0 on success, -errno on error
+        """
+        olddirfd = self._to_signed(cpu.regs[10])  # a0
+        oldpath_addr = cpu.regs[11]  # a1
+        newdirfd = self._to_signed(cpu.regs[12])  # a2
+        newpath_addr = cpu.regs[13]  # a3
+        flags = cpu.regs[14]  # a4
+        
+        # Read paths
+        oldpath = self._read_string(memory, oldpath_addr)
+        if oldpath is None:
+            return self._neg_errno(errno.EFAULT)
+        
+        newpath = self._read_string(memory, newpath_addr)
+        if newpath is None:
+            return self._neg_errno(errno.EFAULT)
+        
+        # Convert to host paths
+        old_host_path = self._sim_to_host_path(oldpath)
+        if old_host_path is None:
+            return self._neg_errno(errno.ENOENT)
+        
+        new_host_path = self._sim_to_host_path(newpath)
+        if new_host_path is None:
+            return self._neg_errno(errno.ENOENT)
+        
+        try:
+            os.link(old_host_path, new_host_path)
             return 0
         except OSError as e:
             return self._neg_errno(e.errno)

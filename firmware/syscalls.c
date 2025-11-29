@@ -28,6 +28,7 @@
 /* Linux RV32 syscall numbers */
 #define SYS_GETCWD      17
 #define SYS_UNLINKAT    35
+#define SYS_LINKAT      37
 #define SYS_RENAMEAT    38
 #define SYS_FACCESSAT   48
 #define SYS_CHDIR       49
@@ -72,6 +73,17 @@ static inline long syscall4(long n, long arg0, long arg1, long arg2, long arg3) 
     register long a2 asm("a2") = arg2;
     register long a3 asm("a3") = arg3;
     asm volatile ("ecall" : "+r"(a0) : "r"(a7), "r"(a1), "r"(a2), "r"(a3) : "memory");
+    return a0;
+}
+
+static inline long syscall5(long n, long arg0, long arg1, long arg2, long arg3, long arg4) {
+    register long a7 asm("a7") = n;
+    register long a0 asm("a0") = arg0;
+    register long a1 asm("a1") = arg1;
+    register long a2 asm("a2") = arg2;
+    register long a3 asm("a3") = arg3;
+    register long a4 asm("a4") = arg4;
+    asm volatile ("ecall" : "+r"(a0) : "r"(a7), "r"(a1), "r"(a2), "r"(a3), "r"(a4) : "memory");
     return a0;
 }
 
@@ -859,10 +871,13 @@ int rename(const char *oldpath, const char *newpath) {
 }
 
 int link(const char *oldpath, const char *newpath) {
-    (void)oldpath;
-    (void)newpath;
-    errno = ENOENT;
-    return -1;
+    /* Use linkat with AT_FDCWD for both paths, flags=0 */
+    long ret = syscall5(SYS_LINKAT, AT_FDCWD, (long)oldpath, AT_FDCWD, (long)newpath, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int access(const char *pathname, int mode) {
