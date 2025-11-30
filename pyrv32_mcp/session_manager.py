@@ -18,7 +18,7 @@ class SessionManager:
         self.sessions: Dict[str, RV32System] = {}
     
     def create_session(self, start_addr: int = 0x80000000, 
-                      fs_root: str = "pyrv32_sim_fs", 
+                      fs_root: str = "/home/dev/git/pyrv32/pyrv32_sim_fs", 
                       trace_buffer_size: int = 1000) -> str:
         """
         Create a new simulator session.
@@ -55,6 +55,23 @@ class SessionManager:
         with open("/tmp/mcp_debug.log", "a") as f:
             f.write(f"[DEBUG] get_session({session_id}): {'FOUND' if session else 'NOT FOUND'}, total sessions: {len(self.sessions)}, keys: {list(self.sessions.keys())}, manager_id={id(self)}\n")
         return session
+    
+    def set_working_directory(self, session_id: str, cwd: str) -> bool:
+        """
+        Set working directory for a session's syscall handler.
+        
+        Args:
+            session_id: Session identifier
+            cwd: Working directory path
+        
+        Returns:
+            True if session exists and cwd was set, False otherwise
+        """
+        session = self.get_session(session_id)
+        if session:
+            session.syscall_handler.cwd = cwd
+            return True
+        return False
     
     def destroy_session(self, session_id: str) -> bool:
         """

@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdio-bufio.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -98,42 +99,6 @@ struct passwd {
     char *pw_shell;
 };
 
-/* Forward declarations for FILE functions */
-static int stdout_putc(char c, FILE *file);
-static int stderr_putc(char c, FILE *file);
-static int stdin_getc(FILE *file);
-static int null_flush(FILE *file);
-
-/* Initialize FILE structures for picolibc with put/get/flush function pointers */
-static FILE __stdin = {
-    .unget = 0,
-    .flags = __SRD,  /* Read-only */
-    .put = NULL,
-    .get = stdin_getc,
-    .flush = null_flush
-};
-
-static FILE __stdout = {
-    .unget = 0,
-    .flags = __SWR,  /* Write-only */
-    .put = stdout_putc,
-    .get = NULL,
-    .flush = null_flush
-};
-
-static FILE __stderr = {
-    .unget = 0,
-    .flags = __SWR,  /* Write-only */
-    .put = stderr_putc,
-    .get = NULL,
-    .flush = null_flush
-};
-
-/* Export FILE pointers for picolibc */
-FILE *const stdin = &__stdin;
-FILE *const stdout = &__stdout;
-FILE *const stderr = &__stderr;
-
 /* UART addresses */
 #define DEBUG_UART_TX    ((volatile unsigned char *)0x10000000)
 #define CONSOLE_UART_TX  ((volatile unsigned char *)0x10001000)
@@ -141,61 +106,116 @@ FILE *const stderr = &__stderr;
 #define CONSOLE_UART_RX_STATUS ((volatile unsigned char *)0x10001008)
 
 /* Timer and clock */
-#define TIMER_MS         ((volatile unsigned int *)0x10000004)  /* Milliseconds since start */
-#define CLOCK_TIME       ((volatile unsigned int *)0x10000008)  /* Unix time (seconds) */
-#define CLOCK_NSEC       ((volatile unsigned int *)0x1000000C)  /* Nanoseconds within second */
+#define TIMER_MS         ((volatile unsigned int *)0x10000004)
+#define CLOCK_TIME       ((volatile unsigned int *)0x10000008)
+#define CLOCK_NSEC       ((volatile unsigned int *)0x1000000C)
 
 /* File descriptor routing */
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
 
-/* NOTE: Picolibc provides its own _sbrk(), so we don't define one here */
+/* Buffered I/O implementations for stdin/stdout/stderr */
 
-/*
- * stdout_putc - Write character to Console UART (for picolibc FILE*)
- */
-static int stdout_putc(char c, FILE *file) {
-    (void)file;  /* Unused */
-    *CONSOLE_UART_TX = (unsigned char)c;
-    return (unsigned char)c;
-}
-
-/*
- * stderr_putc - Write character to Debug UART (for picolibc FILE*)
- */
-static int stderr_putc(char c, FILE *file) {
-    (void)file;  /* Unused */
-    *DEBUG_UART_TX = (unsigned char)c;
-    return (unsigned char)c;
-}
-
-/*
- * stdin_getc - Read character from Console UART (for picolibc FILE*)
- */
-static int stdin_getc(FILE *file) {
-    (void)file;  /* Unused */
-    unsigned char status, byte;
+/* Read from stdin (Console UART RX) */
+static ssize_t stdin_read(int fd, void *buf, size_t count) {
+    (void)fd;
+    unsigned char *ptr = buf;
+    size_t i;
     
-    /* Poll until data available */
-    do {
-        status = *CONSOLE_UART_RX_STATUS;
-    } while (status == 0);
-    
-    byte = *CONSOLE_UART_RX;
-    if (byte == 0xFF) {
-        return EOF;
+    for (i = 0; i < count; i++) {
+        /* Poll until data available */
+        while ((*CONSOLE_UART_RX_STATUS & 0x01) == 0) {
+            /* Wait for data */
+        }
+        ptr[i] = *CONSOLE_UART_RX;
     }
-    return (int)(unsigned char)byte;
+    return count;
 }
 
-/*
- * null_flush - No-op flush function (no buffering)
- */
-static int null_flush(FILE *file) {
-    (void)file;  /* Unused */
-    return 0;
+/* Write to stdout (Console UART TX) */
+static ssize_t stdout_write(int fd, const void *buf, size_t count) {
+    (void)fd;
+    const unsigned char *ptr = buf;
+    size_t i;
+    
+    for (i = 0; i < count; i++) {
+        *CONSOLE_UART_TX = ptr[i];
+    }
+    return count;
 }
+
+/* Write to stderr (Debug UART TX) */
+static ssize_t stderr_write(int fd, const void *buf, size_t count) {
+    (void)fd;
+    const unsigned char *ptr = buf;
+    size_t i;
+    
+    for (i = 0; i < count; i++) {
+        *DEBUG_UART_TX = ptr[i];
+    }
+    return count;
+}
+
+/* No-op lseek for stdio streams */
+static __off_t stdio_lseek(int fd, __off_t offset, int whence) {
+    (void)fd; (void)offset; (void)whence;
+    errno = ESPIPE;  /* Illegal seek on stream */
+    return -1;
+}
+
+/* No-op close for stdio streams (never close stdin/stdout/stderr) */
+static int stdio_close(int fd) {
+    (void)fd;
+    return 0;  /* Success, but don't actually close */
+}
+
+/* Buffers for stdio streams */
+static char stdin_buf[BUFSIZ];
+static char stdout_buf[BUFSIZ];
+static char stderr_buf[BUFSIZ];
+
+/* Buffered FILE structures for stdin/stdout/stderr */
+static struct __file_bufio __stdin_bufio = FDEV_SETUP_BUFIO(
+    STDIN_FILENO,
+    stdin_buf,
+    BUFSIZ,
+    stdin_read,
+    NULL,  /* no write */
+    stdio_lseek,
+    stdio_close,
+    __SRD,
+    0  /* no special buffer flags */
+);
+
+static struct __file_bufio __stdout_bufio = FDEV_SETUP_BUFIO(
+    STDOUT_FILENO,
+    stdout_buf,
+    BUFSIZ,
+    NULL,  /* no read */
+    stdout_write,
+    stdio_lseek,
+    stdio_close,
+    __SWR,
+    __BLBF  /* line buffered */
+);
+
+static struct __file_bufio __stderr_bufio = FDEV_SETUP_BUFIO(
+    STDERR_FILENO,
+    stderr_buf,
+    BUFSIZ,
+    NULL,  /* no read */
+    stderr_write,
+    stdio_lseek,
+    stdio_close,
+    __SWR,
+    0  /* unbuffered */
+);
+
+/* Export FILE pointers for picolibc */
+FILE *const stdin = (FILE *)&__stdin_bufio;
+FILE *const stdout = (FILE *)&__stdout_bufio;
+FILE *const stderr = (FILE *)&__stderr_bufio;
 
 /*
  * Forward declarations

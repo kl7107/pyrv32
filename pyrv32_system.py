@@ -34,7 +34,7 @@ class RV32System:
     Provides programmatic control over CPU, memory, execution, and I/O.
     """
     
-    def __init__(self, start_addr=0x80000000, fs_root="./pyrv32-fs", 
+    def __init__(self, start_addr=0x80000000, fs_root="/home/dev/git/pyrv32/pyrv32_sim_fs", 
                  trace_buffer_size=10000):
         """
         Initialize the simulator system.

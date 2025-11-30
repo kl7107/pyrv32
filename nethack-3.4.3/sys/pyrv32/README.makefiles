@@ -1,0 +1,30 @@
+# PyRV32 NetHack Makefiles
+
+## Utility Makefiles
+
+### `../util/Makefile` (HOST utilities)
+The standard NetHack utility Makefile for building utilities on the HOST system.
+This builds makedefs, lev_comp, dgn_comp, etc. using the host compiler.
+
+### `Makefile.utl` (RV32 cross-compilation)
+Cross-compilation Makefile for building RV32 versions of utilities that run
+in the pyrv32 simulator.
+
+**Strategy:**
+1. Use host bison/flex to generate C source files
+2. Cross-compile those C files for RV32 using picolibc
+3. Link with firmware syscalls for file I/O
+
+**Usage:**
+```bash
+cd util
+make -f ../sys/pyrv32/Makefile.utl
+```
+
+**Outputs:**
+- makedefs.bin (RV32) - generates headers and data files
+- lev_comp.bin (RV32) - compiles .des level files
+- dgn_comp.bin (RV32) - compiles dungeon structure
+
+These RV32 binaries are then run in the simulator with argc/argv setup
+to generate architecture-specific data files.

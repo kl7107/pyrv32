@@ -37,7 +37,11 @@ clear_bss:
     
 bss_done:
     /* Set up argc/argv/envp for main() */
-    /* argc = 1 (program name only) */
+    /* If a0 (argc) is already non-zero, assume argc/argv were pre-set by loader */
+    /* This allows the simulator to pass custom arguments */
+    bnez a0, use_preset_args
+    
+    /* Default: argc = 1 (program name only) */
     li   a0, 1
     
     /* argv = pointer to argv array */
@@ -45,10 +49,16 @@ bss_done:
     lui  a1, %hi(argv_array)
     addi a1, a1, %lo(argv_array)
     
-    /* envp = pointer to environment array (empty) */
+use_preset_args:
+    /* envp = pointer to environment array */
+    /* If a2 is already set (non-zero), keep it; otherwise use static env_array */
+    bnez a2, envp_already_set
+    
+    /* Use static env_array (empty environment) */
     lui  a2, %hi(env_array)
     addi a2, a2, %lo(env_array)
     
+envp_already_set:
     /* Set global environ variable */
     lui  t0, %hi(environ)
     addi t0, t0, %lo(environ)

@@ -340,7 +340,8 @@ Debugger Commands:
 
 def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_interval=0, 
                step_mode=False, breakpoints=None, reg_trace_interval=0, reg_trace_file=None,
-               reg_trace_nonzero=False, trace_buffer_size=10000, write_watchpoints=None):
+               reg_trace_nonzero=False, trace_buffer_size=10000, write_watchpoints=None,
+               argv=None, envp=None):
     """
     Load and run a binary file.
     
@@ -356,6 +357,8 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         reg_trace_nonzero: Only show non-zero registers in trace
         trace_buffer_size: Size of execution trace ring buffer
         write_watchpoints: List of memory addresses to watch for writes
+        argv: List of additional arguments to pass to program
+        envp: List of environment variables in "VAR=VALUE" format
     """
     print("=" * 60)
     print(f"Loading binary: {binary_path}")
@@ -367,7 +370,7 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
     cpu.pc = start_addr
     
     # Initialize syscall handler with filesystem root
-    syscall_handler = SyscallHandler(fs_root="./pyrv32-fs")
+    syscall_handler = SyscallHandler(fs_root="/home/dev/git/pyrv32/pyrv32_sim_fs")
     
     # Initialize debugger
     debugger = Debugger(trace_buffer_size=trace_buffer_size)
@@ -399,6 +402,80 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         sys.exit(1)
     
     mem.load_program(cpu.pc, program_bytes)
+    
+    # Set up argc/argv/envp if provided
+    if argv or envp:
+        import struct
+        # Use area at 0x8001f000 for argv/envp data
+        arg_area = 0x8001f000
+        offset = 0
+        
+        # Build argv array
+        argv_ptrs = []
+        prog_name = os.path.basename(binary_path)
+        
+        # Write program name
+        prog_name_bytes = prog_name.encode() + b'\x00'
+        for i, byte in enumerate(prog_name_bytes):
+            mem.write_byte(arg_area + offset + i, byte)
+        argv_ptrs.append(arg_area + offset)
+        offset += len(prog_name_bytes)
+        
+        # Write additional argv strings
+        if argv:
+            for arg in argv:
+                arg_bytes = arg.encode() + b'\x00'
+                for i, byte in enumerate(arg_bytes):
+                    mem.write_byte(arg_area + offset + i, byte)
+                argv_ptrs.append(arg_area + offset)
+                offset += len(arg_bytes)
+        
+        # Align to 4-byte boundary
+        offset = (offset + 3) & ~3
+        
+        # Build envp array
+        envp_ptrs = []
+        if envp:
+            for env_var in envp:
+                env_bytes = env_var.encode() + b'\x00'
+                for i, byte in enumerate(env_bytes):
+                    mem.write_byte(arg_area + offset + i, byte)
+                envp_ptrs.append(arg_area + offset)
+                offset += len(env_bytes)
+        
+        # Align to 4-byte boundary
+        offset = (offset + 3) & ~3
+        
+        # Write argv pointer array
+        argv_array_addr = arg_area + offset
+        for i, ptr in enumerate(argv_ptrs):
+            ptr_bytes = struct.pack('<I', ptr)
+            for j, byte in enumerate(ptr_bytes):
+                mem.write_byte(argv_array_addr + i * 4 + j, byte)
+        # NULL terminator for argv
+        for i in range(4):
+            mem.write_byte(argv_array_addr + len(argv_ptrs) * 4 + i, 0)
+        offset += (len(argv_ptrs) + 1) * 4
+        
+        # Write envp pointer array
+        envp_array_addr = arg_area + offset
+        for i, ptr in enumerate(envp_ptrs):
+            ptr_bytes = struct.pack('<I', ptr)
+            for j, byte in enumerate(ptr_bytes):
+                mem.write_byte(envp_array_addr + i * 4 + j, byte)
+        # NULL terminator for envp
+        for i in range(4):
+            mem.write_byte(envp_array_addr + len(envp_ptrs) * 4 + i, 0)
+        
+        # Set argc, argv, envp in registers (crt0 checks if a0 != 0)
+        cpu.regs[10] = len(argv_ptrs)  # a0 = argc
+        cpu.regs[11] = argv_array_addr  # a1 = argv
+        cpu.regs[12] = envp_array_addr  # a2 = envp
+        
+        print(f"argc={len(argv_ptrs)}, argv at 0x{argv_array_addr:08x}, envp at 0x{envp_array_addr:08x}")
+        print(f"argv: {[prog_name] + (argv or [])}")
+        if envp:
+            print(f"envp: {envp}")
     
     # Set write watchpoints if requested
     if write_watchpoints:
@@ -596,6 +673,12 @@ Examples:
     parser.add_argument('--trace-size', type=int, default=10000, metavar='N',
                         help='Execution trace buffer size (default: 10000)')
     
+    # Program arguments
+    parser.add_argument('--argv', type=str, action='append', metavar='ARG',
+                        help='Add argument to program argv (can be used multiple times)')
+    parser.add_argument('--envp', type=str, action='append', metavar='VAR=VALUE',
+                        help='Add environment variable (can be used multiple times, format: VAR=VALUE)')
+    
     args = parser.parse_args()
     
     # Determine what to run
@@ -637,7 +720,9 @@ Examples:
                    reg_trace_file=args.reg_file,
                    reg_trace_nonzero=args.reg_nonzero,
                    trace_buffer_size=args.trace_size,
-                   write_watchpoints=args.write_watchpoints)
+                   write_watchpoints=args.write_watchpoints,
+                   argv=args.argv,
+                   envp=args.envp)
 
 
 if __name__ == "__main__":

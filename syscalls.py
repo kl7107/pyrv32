@@ -46,7 +46,7 @@ class SyscallHandler:
         
         Args:
             fs_root: Host directory to use as simulated filesystem root
-                    (e.g., "./pyrv32-fs" maps simulated "/" to "./pyrv32-fs/")
+                    (e.g., "./pyrv32_sim_fs" maps simulated "/" to "./pyrv32_sim_fs/")
         """
         self.fs_root = os.path.abspath(fs_root)
         self.cwd = "/"  # Simulated current working directory
@@ -182,11 +182,15 @@ class SyscallHandler:
             sim_path: Simulated path (e.g., "/nethack/save" or "file.txt")
             
         Returns:
-            Host path (e.g., "./pyrv32-fs/nethack/save")
+            Host path (e.g., "./pyrv32_sim_fs/nethack/save")
         """
         # Handle relative paths by joining with cwd first
         if not sim_path.startswith('/'):
             sim_path = os.path.join(self.cwd, sim_path)
+        
+        # Normalize the path to resolve .. and . components
+        # This must be done BEFORE removing the leading slash
+        sim_path = os.path.normpath(sim_path)
         
         # Remove leading slash
         if sim_path.startswith('/'):

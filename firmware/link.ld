@@ -62,7 +62,14 @@ SECTIONS
     __bss_end = .;
   } > RAM
   
-  /* Heap starts after BSS (for picolibc) */
+  /* Reserved argv/envp area (64KB) - placed right after BSS */
+  /* Layout: [.text/.rodata/.data/.bss] [argv/envp 64KB] [heap] ... [stack 1MB] */
+  . = ALIGN(16);
+  __argv_envp_start = .;
+  . = . + 0x10000;  /* Reserve 64KB for argv/envp */
+  __argv_envp_end = .;
+  
+  /* Heap starts after argv/envp area (for picolibc) */
   . = ALIGN(16);
   _end = .;            /* Heap start (legacy) */
   __heap_start = .;    /* Picolibc heap start */

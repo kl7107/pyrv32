@@ -1,0 +1,12 @@
+# Ignore all files by default
+*
+
+# But track the structure
+!.gitignore
+!README.md
+!usr/
+!usr/games/
+!usr/games/lib/
+!usr/games/lib/nethackdir/
+# Track all files in nethackdir
+!usr/games/lib/nethackdir/*

@@ -161,7 +161,7 @@ class MCPSimulatorServer:
                     "type": "object",
                     "properties": {
                         "start_addr": {"type": "string", "description": "Initial PC value in hex (default: 0x80000000)", "default": "0x80000000"},
-                        "fs_root": {"type": "string", "description": "Root directory for filesystem syscalls (default: 'pyrv32_sim_fs')", "default": "pyrv32_sim_fs"}
+                        "fs_root": {"type": "string", "description": "Root directory for filesystem syscalls (default: '/home/dev/git/pyrv32/pyrv32_sim_fs')", "default": "/home/dev/git/pyrv32/pyrv32_sim_fs"}
                     }
                 }
             },
@@ -193,6 +193,18 @@ class MCPSimulatorServer:
                     "type": "object",
                     "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
                     "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_set_cwd",
+                "description": "Set working directory for filesystem syscalls.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "cwd": {"type": "string", "description": "Working directory path"}
+                    },
+                    "required": ["session_id", "cwd"]
                 }
             },
             {
@@ -389,13 +401,32 @@ class MCPSimulatorServer:
             # Session management
             if name == "sim_create":
                 start_addr = int(arguments.get("start_addr", "0x80000000"), 16)
-                fs_root = arguments.get("fs_root", "pyrv32_sim_fs")
+                
+                # Resolve fs_root relative to repository root
+                if "fs_root" in arguments:
+                    fs_root_arg = arguments["fs_root"]
+                    # If relative path, make it relative to repo root
+                    if not fs_root_arg.startswith('/'):
+                        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        fs_root = os.path.join(repo_root, fs_root_arg)
+                    else:
+                        fs_root = fs_root_arg
+                else:
+                    # Default to pyrv32_sim_fs in repo root
+                    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    fs_root = os.path.join(repo_root, "pyrv32_sim_fs")
+                
                 session_id = self.session_manager.create_session(start_addr, fs_root)
                 return [{"type": "text", "text": f"Created session: {session_id}"}]
             
             elif name == "sim_destroy":
                 success = self.session_manager.destroy_session(arguments["session_id"])
                 msg = f"Destroyed session: {arguments['session_id']}" if success else "Error: Session not found"
+                return [{"type": "text", "text": msg}]
+            
+            elif name == "sim_set_cwd":
+                success = self.session_manager.set_working_directory(arguments["session_id"], arguments["cwd"])
+                msg = f"Set working directory to: {arguments['cwd']}" if success else "Error: Session not found"
                 return [{"type": "text", "text": msg}]
             
             # Get session for all other operations
