@@ -117,19 +117,32 @@ struct passwd {
 
 /* Buffered I/O implementations for stdin/stdout/stderr */
 
-/* Read from stdin (Console UART RX) */
+/* Read from stdin (Console UART RX) - Non-blocking after first byte */
 static ssize_t stdin_read(int fd, void *buf, size_t count) {
     (void)fd;
     unsigned char *ptr = buf;
     size_t i;
     
-    for (i = 0; i < count; i++) {
-        /* Poll until data available */
-        while ((*CONSOLE_UART_RX_STATUS & 0x01) == 0) {
-            /* Wait for data */
+    if (count == 0) {
+        return 0;
+    }
+    
+    /* Block waiting for first byte (ensures we don't return 0 immediately) */
+    while ((*CONSOLE_UART_RX_STATUS & 0x01) == 0) {
+        /* Wait for first byte */
+    }
+    ptr[0] = *CONSOLE_UART_RX;
+    
+    /* Read remaining bytes non-blocking (return partial read if no more data) */
+    for (i = 1; i < count; i++) {
+        /* Check if more data available */
+        if ((*CONSOLE_UART_RX_STATUS & 0x01) == 0) {
+            /* No more data - return what we got */
+            return i;
         }
         ptr[i] = *CONSOLE_UART_RX;
     }
+    
     return count;
 }
 

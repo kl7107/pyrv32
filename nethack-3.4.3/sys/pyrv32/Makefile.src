@@ -115,14 +115,19 @@ HOBJ = $(FIRSTOBJ) allmain.o alloc.o apply.o artifact.o attrib.o ball.o \
 
 .PHONY: all clean install
 
-all: $(GAME).elf
-	@echo "Build complete: $(GAME).elf"
+all: $(GAME).bin
+	@echo "Build complete: $(GAME).bin"
 	@$(SIZE) $(GAME).elf
 
 # Link the game
 $(GAME).elf: $(HOBJ) $(RUNTIME_OBJS) $(LINKER_SCRIPT)
 	@echo "Linking $(GAME).elf..."
 	$(LINK) $(LDFLAGS) -o $@ $(RUNTIME_OBJS) $(HOBJ) $(LIBS)
+
+# Convert to binary
+$(GAME).bin: $(GAME).elf
+	@echo "Creating binary..."
+	$(OBJCOPY) -O binary $< $@
 
 # Generated source files (created by build script in ../include/)
 ../include/pm.h:
@@ -206,4 +211,4 @@ $(FIRMWARE_PATH)/crt0.o $(FIRMWARE_PATH)/syscalls.o:
 -include $(HOBJ:.o=.d) $(SYSOBJ:.o=.d) $(WINOBJ:.o=.d)
 
 clean:
-	rm -f *.o *.d $(GAME).elf $(GAME).map
+	rm -f *.o *.d $(GAME).elf $(GAME).bin $(GAME).map

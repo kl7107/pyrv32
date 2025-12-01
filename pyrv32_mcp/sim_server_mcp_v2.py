@@ -664,8 +664,15 @@ class MCPSimulatorServer:
                 return [{"type": "text", "text": data}]
             
             elif name == "sim_console_uart_write":
-                session.console_uart_write(arguments["data"])
-                return [{"type": "text", "text": "Data written to console UART RX"}]
+                data = arguments["data"]
+                print(f"[DEBUG] console_uart_write received: {data!r} (len={len(data)})", flush=True)
+                print(f"[DEBUG] Bytes: {' '.join(f'{ord(c):02x}' for c in data)}", flush=True)
+                # Convert LF to CR for VT100 terminal compatibility
+                data = data.replace('\n', '\r')
+                print(f"[DEBUG] After LF->CR conversion: {data!r} (len={len(data)})", flush=True)
+                print(f"[DEBUG] Converted bytes: {' '.join(f'{ord(c):02x}' for c in data)}", flush=True)
+                session.console_uart_write(data)
+                return [{"type": "text", "text": f"Data written to console UART RX: {data!r}"}]
             
             elif name == "sim_console_uart_has_data":
                 has_data = session.console_uart_has_data()
