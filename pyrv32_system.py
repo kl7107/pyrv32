@@ -49,6 +49,7 @@ class RV32System:
         # Always use PTY for Console UART in headless/server mode
         self.memory = Memory(use_console_pty=False, save_console_output=True)
         self.syscall_handler = SyscallHandler(fs_root=fs_root)
+        self.fs_root = fs_root  # Track filesystem root for coordination/cleanup
         self.debugger = Debugger(trace_buffer_size=trace_buffer_size)
         
         self.cpu.pc = start_addr

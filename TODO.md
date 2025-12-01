@@ -76,6 +76,7 @@ Always keep going — GO GO GO!
 - [ ] Update main README with NetHack build/play instructions
 - [ ] Document syscall implementation status matrix
 - [ ] Review MCP server console UART write/inject path for redundancy
+- [x] Fix NetHack perm locking (identify stuck lock file, implement proper file locking semantics so character creation can proceed)
 
 ---
 
@@ -159,6 +160,14 @@ Always keep going — GO GO GO!
 - [x] copilot-instructions.md (AI guidelines)
 - [ ] Troubleshooting guide
 - [ ] Two-step dungeon generation docs
+
+---
+
+## ✅ Recently Completed (Dec 1, 2025)
+
+### Perm Lock Cleanup Automation (Dec 1, 2025)
+- Added fs_root tracking in `RV32System` and automatic `_lock` cleanup in `SessionManager` before creating new sessions.
+- Removes stale `perm_lock` hard links under `usr/games/lib/nethackdir/`, preventing NetHack from stalling on character creation retries after an unclean shutdown.
 
 ---
 

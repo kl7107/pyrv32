@@ -45,10 +45,10 @@ YTABH = y.tab.h
 LEXYYC = lex.yy.c
 
 # ----------------------------------------
-# Target executables (RV32 binaries)
+# Target executables (RV32 ELF binaries)
 # ----------------------------------------
 
-all: makedefs.bin lev_comp.bin dgn_comp.bin
+all: makedefs.elf lev_comp.elf dgn_comp.elf
 
 # ----------------------------------------
 # makedefs - generates header files and data files
@@ -58,10 +58,7 @@ MAKEOBJS = makedefs.o monst.o objects.o
 
 makedefs.elf: $(MAKEOBJS) $(CRT0) $(SYSCALLS)
 	$(CC) $(LDFLAGS) -o $@ $(CRT0) $(SYSCALLS) $(MAKEOBJS) $(LIBS)
-
-makedefs.bin: makedefs.elf
-	riscv64-unknown-elf-objcopy -O binary $< $@
-	@echo "Built makedefs.bin (RV32)"
+	@echo "Built makedefs.elf (RV32)"
 
 makedefs.o: makedefs.c
 	$(CC) $(CFLAGS) -c $<
@@ -81,10 +78,7 @@ LEVOBJS = lev_yacc.o lev_lex.o lev_main.o \
 
 lev_comp.elf: $(LEVOBJS) $(CRT0) $(SYSCALLS)
 	$(CC) $(LDFLAGS) -o $@ $(CRT0) $(SYSCALLS) $(LEVOBJS) $(LIBS)
-
-lev_comp.bin: lev_comp.elf
-	riscv64-unknown-elf-objcopy -O binary $< $@
-	@echo "Built lev_comp.bin (RV32)"
+	@echo "Built lev_comp.elf (RV32)"
 
 # Generate C source from yacc/lex (runs on HOST)
 lev_yacc.c: lev_comp.y
@@ -115,10 +109,7 @@ DGNOBJS = dgn_yacc.o dgn_lex.o dgn_main.o \
 
 dgn_comp.elf: $(DGNOBJS) $(CRT0) $(SYSCALLS)
 	$(CC) $(LDFLAGS) -o $@ $(CRT0) $(SYSCALLS) $(DGNOBJS) $(LIBS)
-
-dgn_comp.bin: dgn_comp.elf
-	riscv64-unknown-elf-objcopy -O binary $< $@
-	@echo "Built dgn_comp.bin (RV32)"
+	@echo "Built dgn_comp.elf (RV32)"
 
 # Generate C source from yacc/lex (runs on HOST)
 dgn_yacc.c: dgn_comp.y
@@ -160,8 +151,11 @@ decl.o: ../src/decl.c
 # Utilities
 # ----------------------------------------
 
+generated-files: install
+	@echo "Host utility generation skipped (using archived data files)"
+
 clean:
-	rm -f *.o *.elf *.bin *.map
+	rm -f *.o *.elf *.map
 
 clean-generated:
 	rm -f lev_yacc.c lev_lex.c dgn_yacc.c dgn_lex.c

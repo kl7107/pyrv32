@@ -7,7 +7,6 @@ SHELL=/bin/sh
 PREFIX_CROSS = riscv64-unknown-elf
 CC = $(PREFIX_CROSS)-gcc
 AR = $(PREFIX_CROSS)-ar
-OBJCOPY = $(PREFIX_CROSS)-objcopy
 SIZE = $(PREFIX_CROSS)-size
 LINK = $(CC)
 
@@ -113,21 +112,17 @@ HOBJ = $(FIRSTOBJ) allmain.o alloc.o apply.o artifact.o attrib.o ball.o \
 	wizard.o worm.o worn.o write.o zap.o \
 	$(RANDOBJ) $(SYSOBJ) $(WINOBJ) version.o
 
+
 .PHONY: all clean install
 
-all: $(GAME).bin
-	@echo "Build complete: $(GAME).bin"
+all: $(GAME).elf
+	@echo "Build complete: $(GAME).elf"
 	@$(SIZE) $(GAME).elf
 
 # Link the game
 $(GAME).elf: $(HOBJ) $(RUNTIME_OBJS) $(LINKER_SCRIPT)
 	@echo "Linking $(GAME).elf..."
 	$(LINK) $(LDFLAGS) -o $@ $(RUNTIME_OBJS) $(HOBJ) $(LIBS)
-
-# Convert to binary
-$(GAME).bin: $(GAME).elf
-	@echo "Creating binary..."
-	$(OBJCOPY) -O binary $< $@
 
 # Generated source files (created by build script in ../include/)
 ../include/pm.h:
@@ -211,4 +206,4 @@ $(FIRMWARE_PATH)/crt0.o $(FIRMWARE_PATH)/syscalls.o:
 -include $(HOBJ:.o=.d) $(SYSOBJ:.o=.d) $(WINOBJ:.o=.d)
 
 clean:
-	rm -f *.o *.d $(GAME).elf $(GAME).bin $(GAME).map
+	rm -f *.o *.d $(GAME).elf $(GAME).map

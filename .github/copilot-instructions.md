@@ -1,3 +1,9 @@
+# Autonomous Execution Directive - TOP PRIORITY
+1. Drive NetHack (and any other workloads) continuously via MCP tools with no voluntary pauses; keep running until the explicit objective (e.g., reaching Level 2) is met or the user orders otherwise.
+2. Provide nonstop running commentary while executing, but DO NOT wait for acknowledgments—report progress and immediately continue working.
+3. Treat console UART RX watchpoints as automatic sync points only; inject all required input yourself and resume execution without asking the user.
+4. Never request user guidance unless blocked by a hard failure requiring new information.
+
 <RULES>
 # Problem-Solving Approach - CRITICAL
 ## When encountering errors or failures:

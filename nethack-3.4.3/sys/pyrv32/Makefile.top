@@ -19,16 +19,16 @@ game:
 	@echo "=== Building NetHack for PyRV32 ==="
 	@echo "[1/2] Building host utilities..."
 	( cd util && $(MAKE) generated-files )
-	@echo "[2/2] Building game binary..."
+	@echo "[2/2] Building game ELF..."
 	( cd src && $(MAKE) )
 	@echo "=== Build Complete ==="
 	@echo ""
-	@echo "Binary: src/$(GAME).bin"
-	@echo "To run: cd ../../ && python3 pyrv32.py nethack-3.4.3/src/$(GAME).bin"
+	@echo "Binary: src/$(GAME).elf"
+	@echo "To run: cd ../../ && python3 pyrv32.py nethack-3.4.3/src/$(GAME).elf"
 
 install: game
-	@echo "Build complete. Binary location: src/$(GAME).bin"
-	@echo "To run: cd ../../ && python3 pyrv32.py nethack-3.4.3/src/$(GAME).bin"
+	@echo "Build complete. Binary location: src/$(GAME).elf"
+	@echo "To run: cd ../../ && python3 pyrv32.py nethack-3.4.3/src/$(GAME).elf"
 
 clean:
 	( cd src && $(MAKE) clean )
@@ -37,7 +37,7 @@ clean:
 
 spotless: clean
 	-( cd util && $(MAKE) spotless )
-	rm -f src/$(GAME).bin src/$(GAME).elf src/$(GAME).map
+	rm -f src/$(GAME).elf src/$(GAME).map
 	@echo "Spotless clean complete"
 
 .PHONY: all game install clean spotless

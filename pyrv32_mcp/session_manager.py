@@ -6,6 +6,7 @@ RV32System. Clients receive session IDs and use them to reference
 specific simulator instances in tool calls.
 """
 
+import os
 import uuid
 from typing import Dict, Optional
 from pyrv32_system import RV32System
@@ -31,6 +32,9 @@ class SessionManager:
         Returns:
             session_id: Unique identifier for this session
         """
+        if not self._fs_root_in_use(fs_root):
+            self._cleanup_nethack_locks(fs_root)
+
         session_id = str(uuid.uuid4())
         self.sessions[session_id] = RV32System(
             start_addr=start_addr,
@@ -40,6 +44,38 @@ class SessionManager:
         with open("/tmp/mcp_debug.log", "a") as f:
             f.write(f"[DEBUG] Created session {session_id}, total sessions: {len(self.sessions)}, manager_id={id(self)}\n")
         return session_id
+
+    def _fs_root_in_use(self, fs_root: str) -> bool:
+        """Return True if any active session already uses the fs_root."""
+        for session in self.sessions.values():
+            if getattr(session, "fs_root", None) == fs_root:
+                return True
+        return False
+
+    def _cleanup_nethack_locks(self, fs_root: str) -> None:
+        """Remove stale NetHack *_lock files to avoid perm lock failures."""
+        lock_dir = os.path.join(fs_root, "usr/games/lib/nethackdir")
+        if not os.path.isdir(lock_dir):
+            return
+
+        removed = []
+        for entry in os.listdir(lock_dir):
+            if not entry.endswith("_lock"):
+                continue
+            lock_path = os.path.join(lock_dir, entry)
+            try:
+                os.unlink(lock_path)
+                removed.append(entry)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                with open("/tmp/mcp_debug.log", "a") as f:
+                    f.write(f"[WARN] Failed to remove stale lock {lock_path}: {exc}\n")
+
+        if removed:
+            with open("/tmp/mcp_debug.log", "a") as f:
+                names = ", ".join(removed)
+                f.write(f"[INFO] Removed stale NetHack locks: {names}\n")
     
     def get_session(self, session_id: str) -> Optional[RV32System]:
         """
