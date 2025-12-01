@@ -19,6 +19,12 @@ from uart import (
 from exceptions import MemoryAccessFault
 
 
+class WatchpointHit:
+    """Marker for when a watchpoint is hit during memory access"""
+    def __init__(self, address, access_type):
+        self.address = address
+        self.access_type = access_type  # 'read' or 'write'
+
 class Memory:
     """
     Byte-addressable memory with dual UART system.
@@ -66,6 +72,9 @@ class Memory:
         """
         # Sparse memory - dict mapping address to byte value
         self.mem = {}
+        
+        # Watchpoint hits for current instruction (cleared after each instruction)
+        self.pending_watchpoints = []
         
         # Debug UART (TX only, for printf debugging)
         self.uart = UART()
@@ -133,6 +142,18 @@ class Memory:
         if not self.is_valid_address(address):
             raise MemoryAccessFault(address, 'load', self.current_pc)
         
+        # Check read watchpoints - record hit but don't break yet
+        if address in self.read_watchpoints:
+            wp_hit = WatchpointHit(address, 'read')
+            self.pending_watchpoints.append(wp_hit)
+            print(f"\n[READ WATCHPOINT] Read from {address:#x} (PC={self.current_pc:#x})")
+            
+            # Auto-dump VT100 screen when reading console RX status (0x10001008)
+            if address == 0x10001008 and hasattr(self, 'console_uart'):
+                screen_text = self.console_uart.dump_screen(show_cursor=True)
+                if screen_text:
+                    print(f"[SCREEN DUMP] Captured screen at RX status read")
+        
         # Initialize timer on first access
         if self.timer_start is None:
             self.timer_start = time.time()
@@ -178,10 +199,6 @@ class Memory:
         if address == self.CONSOLE_UART_RX_STATUS:
             return self.console_uart.rx_status()
         
-        # Check read watchpoints
-        if address in self.read_watchpoints:
-            print(f"\n[READ WATCHPOINT] Read from {address:#x} (PC={self.current_pc:#x})")
-        
         # Normal memory read
         return self.mem.get(address, 0)
     
@@ -199,13 +216,15 @@ class Memory:
         address = address & 0xFFFFFFFF
         value = value & 0xFF
         
-        # Check write watchpoints
-        if address in self.write_watchpoints:
-            print(f"\n[WRITE WATCHPOINT] Write to {address:#x} = {value:#04x} (PC={self.current_pc:#x})")
-        
         # Check if address is valid
         if not self.is_valid_address(address):
             raise MemoryAccessFault(address, 'store', self.current_pc)
+        
+        # Check write watchpoints - record hit but don't break yet
+        if address in self.write_watchpoints:
+            wp_hit = WatchpointHit(address, 'write')
+            self.pending_watchpoints.append(wp_hit)
+            print(f"\n[WRITE WATCHPOINT] Write to {address:#x} = {value:#04x} (PC={self.current_pc:#x})")
         
         # Initialize timer on first access
         if self.timer_start is None:
@@ -363,3 +382,12 @@ class Memory:
         """Clear all watchpoints."""
         self.read_watchpoints.clear()
         self.write_watchpoints.clear()
+    
+    def check_pending_watchpoints(self):
+        """
+        Check if any watchpoints were hit during the last instruction.
+        Returns the list of watchpoint hits and clears the pending list.
+        """
+        hits = self.pending_watchpoints[:]
+        self.pending_watchpoints.clear()
+        return hits

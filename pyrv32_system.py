@@ -13,6 +13,7 @@ from execute import execute_instruction
 from exceptions import EBreakException, ECallException, MemoryAccessFault
 from debugger import Debugger
 from syscalls import SyscallHandler
+from elftools.elf.elffile import ELFFile
 
 
 class ExecutionResult:
@@ -58,39 +59,185 @@ class RV32System:
         # Track UART output positions for incremental reads
         self._debug_uart_read_pos = 0
         self._console_uart_read_pos = 0
+        
+        # Symbol table for debugging
+        self.symbols = {}  # name -> address
+        self.reverse_symbols = {}  # address -> name
+        self.elf_path = None  # Path to loaded ELF file
     
-    def load_binary(self, binary_path):
+    def load_elf(self, elf_path):
         """
-        Load a binary file into memory.
+        Load an ELF file into memory.
+        
+        Parses the ELF file, loads all PT_LOAD segments into memory,
+        and sets PC to the entry point.
         
         Args:
-            binary_path: Path to binary file
+            elf_path: Path to ELF file
             
         Returns:
-            Number of bytes loaded
+            Dictionary with:
+                - bytes_loaded: Total bytes loaded
+                - entry_point: ELF entry point address
+                - segments: List of loaded segments (vaddr, size)
         """
-        with open(binary_path, 'rb') as f:
-            program_bytes = list(f.read())
-        
-        self.memory.load_program(self.cpu.pc, program_bytes)
-        return len(program_bytes)
+        with open(elf_path, 'rb') as f:
+            elf = ELFFile(f)
+            
+            # Verify RISC-V architecture
+            if elf.header['e_machine'] != 'EM_RISCV':
+                raise ValueError(f"ELF file is not RISC-V (machine={elf.header['e_machine']})")
+            
+            # Verify 32-bit
+            if elf.elfclass != 32:
+                raise ValueError(f"ELF file is not 32-bit (class={elf.elfclass})")
+            
+            entry_point = elf.header['e_entry']
+            bytes_loaded = 0
+            segments = []
+            
+            # Load all PT_LOAD segments
+            for segment in elf.iter_segments():
+                if segment['p_type'] == 'PT_LOAD':
+                    vaddr = segment['p_vaddr']
+                    memsz = segment['p_memsz']
+                    filesz = segment['p_filesz']
+                    data = segment.data()
+                    
+                    # Load file data
+                    if filesz > 0:
+                        self.memory.load_program(vaddr, list(data))
+                        bytes_loaded += filesz
+                    
+                    # Zero-fill BSS (memsz > filesz)
+                    if memsz > filesz:
+                        zero_size = memsz - filesz
+                        zero_data = [0] * zero_size
+                        self.memory.load_program(vaddr + filesz, zero_data)
+                        bytes_loaded += zero_size
+                    
+                    segments.append({
+                        'vaddr': vaddr,
+                        'memsz': memsz,
+                        'filesz': filesz,
+                        'flags': segment['p_flags']
+                    })
+            
+            # Extract symbol table
+            self.symbols = {}
+            self.reverse_symbols = {}
+            self.elf_path = elf_path
+            
+            symtab = elf.get_section_by_name('.symtab')
+            if symtab:
+                for symbol in symtab.iter_symbols():
+                    name = symbol.name
+                    addr = symbol['st_value']
+                    
+                    # Only store valid symbols with names and addresses
+                    if name and addr != 0:
+                        self.symbols[name] = addr
+                        # For reverse lookup, prefer function names over other symbols
+                        if addr not in self.reverse_symbols or symbol['st_info']['type'] == 'STT_FUNC':
+                            self.reverse_symbols[addr] = name
+            
+            # Set PC to entry point
+            self.cpu.pc = entry_point
+            
+            return {
+                'bytes_loaded': bytes_loaded,
+                'entry_point': entry_point,
+                'segments': segments,
+                'symbols_loaded': len(self.symbols)
+            }
     
-    def load_binary_data(self, binary_data, address=None):
+    def lookup_symbol(self, name):
         """
-        Load binary data into memory.
+        Look up symbol address by name.
         
         Args:
-            binary_data: Bytes to load
-            address: Load address (default: use current PC)
+            name: Symbol name
             
         Returns:
-            Number of bytes loaded
+            Address (int) or None if not found
         """
-        if address is None:
-            address = self.cpu.pc
+        return self.symbols.get(name)
+    
+    def reverse_lookup(self, address):
+        """
+        Look up symbol name by address.
         
-        self.memory.load_program(address, list(binary_data))
-        return len(binary_data)
+        Args:
+            address: Memory address
+            
+        Returns:
+            Symbol name (str) or None if not found
+        """
+        return self.reverse_symbols.get(address)
+    
+    def get_symbol_info(self, address):
+        """
+        Get symbol information for an address.
+        
+        Returns the nearest symbol at or before the address.
+        
+        Args:
+            address: Memory address
+            
+        Returns:
+            Dictionary with 'name' and 'offset', or None
+        """
+        # Exact match
+        if address in self.reverse_symbols:
+            return {'name': self.reverse_symbols[address], 'offset': 0}
+        
+        # Find nearest symbol before this address
+        candidates = [(addr, name) for addr, name in self.reverse_symbols.items() if addr < address]
+        if candidates:
+            nearest_addr, nearest_name = max(candidates, key=lambda x: x[0])
+            return {'name': nearest_name, 'offset': address - nearest_addr}
+        
+        return None
+    
+    def disassemble(self, start_addr, end_addr):
+        """
+        Disassemble code with source interleaving using objdump.
+        
+        Args:
+            start_addr: Start address (hex string or int)
+            end_addr: End address (hex string or int)
+            
+        Returns:
+            Disassembly output string
+        """
+        import subprocess
+        
+        if isinstance(start_addr, str):
+            start_addr = int(start_addr, 16)
+        if isinstance(end_addr, str):
+            end_addr = int(end_addr, 16)
+        
+        if not self.elf_path:
+            return "Error: No ELF file loaded"
+        
+        # Use objdump to disassemble with source
+        cmd = [
+            'riscv64-unknown-elf-objdump',
+            '-d',
+            '-S',
+            '--start-address=' + hex(start_addr),
+            '--stop-address=' + hex(end_addr),
+            self.elf_path
+        ]
+        
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                return f"Error: objdump failed: {result.stderr}"
+        except Exception as e:
+            return f"Error: {e}"
     
     def reset(self):
         """Reset the system to initial state"""
@@ -113,8 +260,8 @@ class RV32System:
         Returns:
             ExecutionResult with status and instruction count
         """
-        if self.halted:
-            return ExecutionResult('halted', 0, pc=self.cpu.pc)
+        # Clear halted flag to allow resuming after breakpoint/watchpoint
+        self.halted = False
         
         executed = 0
         
@@ -138,6 +285,10 @@ class RV32System:
                     self.cpu.regs
                 )
                 if should_break:
+                    # Auto-dump VT100 screen when hitting console RX status breakpoint (0x10001008)
+                    if "0x10001008" in break_msg or "0x10001008" in str(self.cpu.pc):
+                        self.dump_screen(show_cursor=True)
+                    
                     return ExecutionResult(
                         'breakpoint', 
                         executed, 
@@ -159,6 +310,19 @@ class RV32System:
                 
                 executed += 1
                 self.instruction_count += 1
+                
+                # Check for watchpoints that were hit during instruction execution
+                watchpoint_hits = self.memory.check_pending_watchpoints()
+                if watchpoint_hits:
+                    # Watchpoint was hit - halt after instruction completed
+                    self.halted = True
+                    wp_info = watchpoint_hits[0]  # Report first watchpoint
+                    return ExecutionResult(
+                        'halted',
+                        executed,
+                        error=f"{wp_info.access_type.capitalize()} watchpoint at {wp_info.address:#x}",
+                        pc=self.cpu.pc
+                    )
         
         except EBreakException as e:
             self.halted = True
@@ -194,8 +358,8 @@ class RV32System:
         Returns:
             ExecutionResult
         """
-        if self.halted:
-            return ExecutionResult('halted', 0, pc=self.cpu.pc)
+        # Clear halted flag to allow resuming after breakpoint/watchpoint
+        self.halted = False
         
         executed = 0
         
@@ -215,7 +379,7 @@ class RV32System:
     
     def run_until_output(self, max_steps=100000):
         """
-        Run until UART has new output or execution stops.
+        Run until console UART has new output or execution stops.
         
         Args:
             max_steps: Maximum instructions to execute
@@ -223,14 +387,14 @@ class RV32System:
         Returns:
             ExecutionResult
         """
-        # Check debug UART for output
-        initial_output_len = len(self.memory.uart.get_output_text())
+        # FIXED: Check console UART for output (NetHack writes to console, not debug)
+        initial_output_len = len(self.memory.console_uart.get_output_text())
         
         for i in range(max_steps):
             result = self.step(1)
             
-            # Check if we have new output
-            current_output_len = len(self.memory.uart.get_output_text())
+            # Check if we have new output on CONSOLE UART
+            current_output_len = len(self.memory.console_uart.get_output_text())
             if current_output_len > initial_output_len:
                 return ExecutionResult('running', result.instruction_count, pc=self.cpu.pc)
             
@@ -239,6 +403,38 @@ class RV32System:
                 return result
         
         return ExecutionResult('max_steps', max_steps, pc=self.cpu.pc)
+    
+    def run_until_console_status_read(self, max_steps=1000000):
+        """
+        Run until a read instruction accesses Console UART RX Status register (0x10001008).
+        This is useful for detecting when a program is polling for input.
+        
+        Temporarily sets a read watchpoint at 0x10001008, runs until hit, then removes it.
+        If a watchpoint already exists at that address, it will be left in place.
+        
+        Args:
+            max_steps: Maximum instructions to execute
+            
+        Returns:
+            ExecutionResult with status 'halted' if polling detected,
+            or other status if execution stopped for another reason
+        """
+        CONSOLE_UART_RX_STATUS_ADDR = 0x10001008
+        
+        # Check if watchpoint already exists
+        had_watchpoint = CONSOLE_UART_RX_STATUS_ADDR in self.memory.read_watchpoints
+        if not had_watchpoint:
+            self.add_read_watchpoint(CONSOLE_UART_RX_STATUS_ADDR)
+        
+        # Run normally - watchpoint will break execution
+        result = self.run(max_steps)
+        
+        # Remove temporary watchpoint if we added it
+        if not had_watchpoint:
+            if CONSOLE_UART_RX_STATUS_ADDR in self.memory.read_watchpoints:
+                self.remove_read_watchpoint(CONSOLE_UART_RX_STATUS_ADDR)
+        
+        return result
     
     # UART I/O methods
     
@@ -308,9 +504,13 @@ class RV32System:
         if isinstance(data, str):
             data = data.encode('utf-8')
         
+        print(f"[CONSOLE_UART_WRITE] Writing {len(data)} bytes to RX buffer", flush=True)
+        
         # Directly add to RX buffer for programmatic control
         for byte in data:
             self.memory.console_uart.rx_buffer.append(byte)
+        
+        print(f"[CONSOLE_UART_WRITE] RX buffer now has {len(self.memory.console_uart.rx_buffer)} bytes", flush=True)
     
     def console_uart_has_data(self):
         """
@@ -477,6 +677,14 @@ class RV32System:
     
     # Watchpoint management
     
+    def add_read_watchpoint(self, address):
+        """Add read watchpoint at memory address"""
+        self.memory.add_read_watchpoint(address)
+    
+    def remove_read_watchpoint(self, address):
+        """Remove read watchpoint"""
+        self.memory.remove_read_watchpoint(address)
+    
     def add_write_watchpoint(self, address):
         """Add write watchpoint at memory address"""
         self.memory.add_write_watchpoint(address)
@@ -488,6 +696,14 @@ class RV32System:
     def clear_write_watchpoints(self):
         """Clear all write watchpoints"""
         self.memory.clear_write_watchpoints()
+    
+    def list_read_watchpoints(self):
+        """List all read watchpoints"""
+        return sorted(list(self.memory.read_watchpoints))
+    
+    def list_write_watchpoints(self):
+        """List all write watchpoints"""
+        return sorted(list(self.memory.write_watchpoints))
     
     # Status queries
     
@@ -510,10 +726,52 @@ class RV32System:
         Returns:
             Dict with status information
         """
+        # FIXED: Correctly check console UART output
         return {
             'halted': self.halted,
             'pc': self.cpu.pc,
             'instruction_count': self.instruction_count,
-            'has_uart_output': self.uart_has_data(),
+            'console_has_output': len(self.memory.console_uart.get_output_text()) > 0,
             'breakpoint_count': len(self.debugger.bp_manager.list())
         }
+    
+    # VT100 Terminal screen commands
+    
+    def get_screen_display(self):
+        """
+        Get VT100 terminal screen as list of lines.
+        
+        Returns:
+            List of 24 strings (80 chars each), or None if not available
+        """
+        return self.memory.console_uart.get_screen_display()
+    
+    def get_screen_text(self):
+        """
+        Get VT100 terminal screen as single string.
+        
+        Returns:
+            String with newline-separated lines, or None if not available
+        """
+        return self.memory.console_uart.get_screen_text()
+    
+    def dump_screen(self, show_cursor=True):
+        """
+        Dump VT100 screen to log and return it.
+        
+        Args:
+            show_cursor: Include cursor position in output
+            
+        Returns:
+            Screen text, or None if not available
+        """
+        return self.memory.console_uart.dump_screen(show_cursor=show_cursor)
+    
+    def inject_console_input(self, data):
+        """
+        Inject input into console UART RX buffer.
+        
+        Args:
+            data: String or bytes to inject
+        """
+        self.memory.console_uart.inject_input(data)

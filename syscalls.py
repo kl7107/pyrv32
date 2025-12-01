@@ -73,6 +73,16 @@ class SyscallHandler:
         """
         syscall_num = cpu.regs[17]  # a7
         
+        # Log syscall entry
+        syscall_names = {
+            17: "GETCWD", 35: "UNLINKAT", 37: "LINKAT", 38: "RENAMEAT",
+            48: "FACCESSAT", 49: "CHDIR", 56: "OPENAT", 57: "CLOSE",
+            62: "LSEEK", 63: "READ", 64: "WRITE", 79: "FSTATAT",
+            80: "FSTAT", 93: "EXIT", 94: "EXIT_GROUP"
+        }
+        syscall_name = syscall_names.get(syscall_num, f"UNKNOWN_{syscall_num}")
+        print(f"[SYSCALL] {syscall_name} (a0={cpu.regs[10]:08x}, a1={cpu.regs[11]:08x}, a2={cpu.regs[12]:08x}, a3={cpu.regs[13]:08x})")
+        
         # Dispatch to handler
         handlers = {
             SYS_GETCWD: self._sys_getcwd,
@@ -355,6 +365,31 @@ class SyscallHandler:
         if fd not in self.fd_map:
             return self._neg_errno(errno.EBADF)
         
+        # Special handling for stdin (fd=0) - read from console UART RX buffer
+        if fd == 0:
+            if not hasattr(memory, 'console_uart'):
+                # No console UART available, return 0 (EOF)
+                return 0
+            
+            # Read from console UART RX buffer
+            data = []
+            for i in range(count):
+                if len(memory.console_uart.rx_buffer) > 0:
+                    byte = memory.console_uart.rx_buffer.pop(0)
+                    data.append(byte)
+                else:
+                    break  # No more data available
+            
+            # Debug logging
+            if len(data) > 0:
+                print(f"[SYSCALL READ fd=0] Read {len(data)} bytes from console RX: {bytes(data)[:50]}")
+            
+            # Write data to simulator memory
+            for i, byte in enumerate(data):
+                memory.write_byte(buf_addr + i, byte)
+            
+            return len(data)
+        
         host_fd = self.fd_map[fd]
         
         try:
@@ -387,6 +422,19 @@ class SyscallHandler:
         
         if fd not in self.fd_map:
             return self._neg_errno(errno.EBADF)
+        
+        # Special handling for stdout/stderr (fd=1,2) - write to console UART TX
+        if fd in (1, 2):
+            if not hasattr(memory, 'console_uart'):
+                # No console UART available, silently succeed
+                return count
+            
+            # Read from simulator memory and write to console UART
+            for i in range(count):
+                byte = memory.read_byte(buf_addr + i)
+                memory.console_uart.tx_byte(byte)
+            
+            return count
         
         host_fd = self.fd_map[fd]
         

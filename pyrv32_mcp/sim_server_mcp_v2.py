@@ -166,15 +166,15 @@ class MCPSimulatorServer:
                 }
             },
             {
-                "name": "sim_load",
-                "description": "Load a RISC-V binary into simulator session.",
+                "name": "sim_load_elf",
+                "description": "Load a RISC-V ELF file into simulator session. Parses ELF structure, loads PT_LOAD segments, and sets PC to entry point.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "Session identifier"},
-                        "binary_path": {"type": "string", "description": "Path to RISC-V binary file"}
+                        "elf_path": {"type": "string", "description": "Path to RISC-V ELF file"}
                     },
-                    "required": ["session_id", "binary_path"]
+                    "required": ["session_id", "elf_path"]
                 }
             },
             {
@@ -244,6 +244,18 @@ class MCPSimulatorServer:
                 }
             },
             {
+                "name": "sim_run_until_console_status_read",
+                "description": "Run until a read instruction accesses Console UART RX Status (0x10001008). Useful for detecting when a program polls for input.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000}
+                    },
+                    "required": ["session_id"]
+                }
+            },
+            {
                 "name": "sim_get_status",
                 "description": "Get current status of simulator session.",
                 "inputSchema": {
@@ -298,6 +310,39 @@ class MCPSimulatorServer:
                     "type": "object",
                     "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
                     "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_get_screen",
+                "description": "Get VT100 terminal screen as text (80x24).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_dump_screen",
+                "description": "Dump VT100 screen to /tmp/screen_dump.log and return it.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "show_cursor": {"type": "boolean", "description": "Include cursor position (default: true)"}
+                    },
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_inject_input",
+                "description": "Inject input into console UART RX buffer (simulate keyboard).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "data": {"type": "string", "description": "Input string to inject"}
+                    },
+                    "required": ["session_id", "data"]
                 }
             },
             {
@@ -392,6 +437,124 @@ class MCPSimulatorServer:
                     "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
                     "required": ["session_id"]
                 }
+            },
+            {
+                "name": "sim_get_trace",
+                "description": "Get instruction trace buffer entries (last N instructions).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "count": {"type": "integer", "description": "Number of trace entries to retrieve (default: 20)"}
+                    },
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_add_read_watchpoint",
+                "description": "Add memory read watchpoint at address. Breaks execution when address is read.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "address": {"type": "string", "description": "Memory address in hex"}
+                    },
+                    "required": ["session_id", "address"]
+                }
+            },
+            {
+                "name": "sim_add_write_watchpoint",
+                "description": "Add memory write watchpoint at address. Breaks execution when address is written.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "address": {"type": "string", "description": "Memory address in hex"}
+                    },
+                    "required": ["session_id", "address"]
+                }
+            },
+            {
+                "name": "sim_remove_read_watchpoint",
+                "description": "Remove memory read watchpoint at address.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "address": {"type": "string", "description": "Memory address in hex"}
+                    },
+                    "required": ["session_id", "address"]
+                }
+            },
+            {
+                "name": "sim_remove_write_watchpoint",
+                "description": "Remove memory write watchpoint at address.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "address": {"type": "string", "description": "Memory address in hex"}
+                    },
+                    "required": ["session_id", "address"]
+                }
+            },
+            {
+                "name": "sim_list_watchpoints",
+                "description": "List all memory watchpoints (read and write).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_lookup_symbol",
+                "description": "Look up symbol address by name.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "name": {"type": "string", "description": "Symbol name (function or variable)"}
+                    },
+                    "required": ["session_id", "name"]
+                }
+            },
+            {
+                "name": "sim_reverse_lookup",
+                "description": "Look up symbol name by address.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "address": {"type": "string", "description": "Memory address in hex"}
+                    },
+                    "required": ["session_id", "address"]
+                }
+            },
+            {
+                "name": "sim_get_symbol_info",
+                "description": "Get symbol information for an address (finds nearest symbol at or before address).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "address": {"type": "string", "description": "Memory address in hex"}
+                    },
+                    "required": ["session_id", "address"]
+                }
+            },
+            {
+                "name": "sim_disassemble",
+                "description": "Disassemble code with source interleaving using objdump -d -S.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "start_addr": {"type": "string", "description": "Start address in hex"},
+                        "end_addr": {"type": "string", "description": "End address in hex"}
+                    },
+                    "required": ["session_id", "start_addr", "end_addr"]
+                }
             }
         ]
     
@@ -438,10 +601,16 @@ class MCPSimulatorServer:
             if not session:
                 return [{"type": "text", "text": f"Error: Session {session_id} not found"}]
             
-            # Binary operations
-            if name == "sim_load":
-                session.load_binary(arguments["binary_path"])
-                return [{"type": "text", "text": f"Loaded binary: {arguments['binary_path']}"}]
+            # ELF loading
+            if name == "sim_load_elf":
+                result = session.load_elf(arguments["elf_path"])
+                text = f"Loaded ELF: {arguments['elf_path']}\n"
+                text += f"Entry point: 0x{result['entry_point']:08x}\n"
+                text += f"Bytes loaded: {result['bytes_loaded']}\n"
+                text += f"Segments: {len(result['segments'])}\n"
+                for i, seg in enumerate(result['segments']):
+                    text += f"  Segment {i}: vaddr=0x{seg['vaddr']:08x} memsz={seg['memsz']} filesz={seg['filesz']} flags=0x{seg['flags']:x}\n"
+                return [{"type": "text", "text": text}]
             
             elif name == "sim_reset":
                 session.reset()
@@ -469,9 +638,16 @@ class MCPSimulatorServer:
                     text += f"\nError: {result.error}"
                 return [{"type": "text", "text": text}]
             
+            elif name == "sim_run_until_console_status_read":
+                result = session.run_until_console_status_read(arguments.get("max_steps", 1000000))
+                text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
+                if result.error:
+                    text += f"\nError: {result.error}"
+                return [{"type": "text", "text": text}]
+            
             elif name == "sim_get_status":
                 status = session.get_status()
-                text = f"PC: 0x{status['pc']:08x}\nInstructions: {status['instruction_count']}\nHalted: {status['halted']}\nUART has data: {status['uart_has_data']}"
+                text = f"PC: 0x{status['pc']:08x}\nInstructions: {status['instruction_count']}\nHalted: {status['halted']}\nConsole UART has output: {status['console_has_output']}"
                 return [{"type": "text", "text": text}]
             
             # Debug UART
@@ -494,6 +670,25 @@ class MCPSimulatorServer:
             elif name == "sim_console_uart_has_data":
                 has_data = session.console_uart_has_data()
                 return [{"type": "text", "text": str(has_data)}]
+            
+            elif name == "sim_get_screen":
+                screen_text = session.get_screen_text()
+                if screen_text:
+                    return [{"type": "text", "text": screen_text}]
+                else:
+                    return [{"type": "text", "text": "VT100 terminal not available"}]
+            
+            elif name == "sim_dump_screen":
+                show_cursor = arguments.get("show_cursor", True)
+                screen_text = session.dump_screen(show_cursor=show_cursor)
+                if screen_text:
+                    return [{"type": "text", "text": f"Screen dumped to /tmp/screen_dump.log\n\n{screen_text}"}]
+                else:
+                    return [{"type": "text", "text": "VT100 terminal not available"}]
+            
+            elif name == "sim_inject_input":
+                session.inject_console_input(arguments["data"])
+                return [{"type": "text", "text": f"Injected {len(arguments['data'])} characters to console RX"}]
             
             # Registers
             elif name == "sim_get_registers":
@@ -530,13 +725,109 @@ class MCPSimulatorServer:
             
             elif name == "sim_remove_breakpoint":
                 address = int(arguments["address"], 16)
-                session.remove_breakpoint(address)
-                return [{"type": "text", "text": f"Removed breakpoint at {arguments['address']}"}]
+                breakpoints = session.list_breakpoints()
+                bp_to_remove = next((bp for bp in breakpoints if bp.address == address), None)
+                if bp_to_remove:
+                    session.remove_breakpoint(bp_to_remove.id)
+                    return [{"type": "text", "text": f"Removed breakpoint at {arguments['address']}"}]
+                else:
+                    return [{"type": "text", "text": f"No breakpoint found at {arguments['address']}"}]
             
             elif name == "sim_list_breakpoints":
                 breakpoints = session.list_breakpoints()
-                text = "\n".join([hex(bp) for bp in breakpoints]) if breakpoints else "No breakpoints"
+                if not breakpoints:
+                    return [{"type": "text", "text": "No breakpoints set"}]
+                bp_list = "\n".join([f"{hex(bp.address)} (ID {bp.id})" for bp in breakpoints])
+                return [{"type": "text", "text": bp_list}]
+            
+            # Watchpoints
+            elif name == "sim_add_read_watchpoint":
+                address = int(arguments["address"], 16)
+                session.add_read_watchpoint(address)
+                return [{"type": "text", "text": f"Added read watchpoint at {arguments['address']}"}]
+            
+            elif name == "sim_add_write_watchpoint":
+                address = int(arguments["address"], 16)
+                session.add_write_watchpoint(address)
+                return [{"type": "text", "text": f"Added write watchpoint at {arguments['address']}"}]
+            
+            elif name == "sim_remove_read_watchpoint":
+                address = int(arguments["address"], 16)
+                session.remove_read_watchpoint(address)
+                return [{"type": "text", "text": f"Removed read watchpoint at {arguments['address']}"}]
+            
+            elif name == "sim_remove_write_watchpoint":
+                address = int(arguments["address"], 16)
+                session.remove_write_watchpoint(address)
+                return [{"type": "text", "text": f"Removed write watchpoint at {arguments['address']}"}]
+            
+            elif name == "sim_list_watchpoints":
+                read_wps = session.list_read_watchpoints()
+                write_wps = session.list_write_watchpoints()
+                result = []
+                if read_wps:
+                    result.append("Read watchpoints:")
+                    for addr in read_wps:
+                        result.append(f"  {hex(addr)}")
+                if write_wps:
+                    result.append("Write watchpoints:")
+                    for addr in write_wps:
+                        result.append(f"  {hex(addr)}")
+                if not result:
+                    return [{"type": "text", "text": "No watchpoints set"}]
+                return [{"type": "text", "text": "\n".join(result)}]
+            
+            elif name == "sim_list_breakpoints":
+                breakpoints = session.list_breakpoints()
+                text = "\n".join([f"{hex(bp.address)} (ID {bp.id})" for bp in breakpoints]) if breakpoints else "No breakpoints"
                 return [{"type": "text", "text": text}]
+            
+            # Symbol lookup
+            elif name == "sim_lookup_symbol":
+                addr = session.lookup_symbol(arguments["name"])
+                if addr is not None:
+                    return [{"type": "text", "text": f"{hex(addr)}"}]
+                else:
+                    return [{"type": "text", "text": f"Symbol '{arguments['name']}' not found"}]
+            
+            elif name == "sim_reverse_lookup":
+                addr = int(arguments["address"], 16)
+                name = session.reverse_lookup(addr)
+                if name:
+                    return [{"type": "text", "text": name}]
+                else:
+                    return [{"type": "text", "text": f"No symbol at {arguments['address']}"}]
+            
+            elif name == "sim_get_symbol_info":
+                addr = int(arguments["address"], 16)
+                info = session.get_symbol_info(addr)
+                if info:
+                    if info['offset'] == 0:
+                        text = f"{info['name']} (exact match)"
+                    else:
+                        text = f"{info['name']}+{info['offset']} ({info['name']} + {info['offset']} bytes)"
+                    return [{"type": "text", "text": text}]
+                else:
+                    return [{"type": "text", "text": f"No symbol found near {arguments['address']}"}]
+            
+            elif name == "sim_disassemble":
+                output = session.disassemble(arguments["start_addr"], arguments["end_addr"])
+                return [{"type": "text", "text": output}]
+            
+            elif name == "sim_get_trace":
+                count = arguments.get("count", 20)
+                # Enable trace if not already enabled
+                if not session.debugger.trace_buffer.enabled:
+                    session.debugger.trace_buffer.enabled = True
+                
+                trace_entries = session.debugger.trace_buffer.get_last(count)
+                if not trace_entries:
+                    return [{"type": "text", "text": "Trace buffer empty (may need to enable tracing)"}]
+                
+                lines = []
+                for entry in trace_entries:
+                    lines.append(f"[{entry.index:06d}] PC=0x{entry.pc:08x} insn=0x{entry.insn:08x}")
+                return [{"type": "text", "text": "\n".join(lines)}]
             
             else:
                 return [{"type": "text", "text": f"Error: Unknown tool {name}"}]
