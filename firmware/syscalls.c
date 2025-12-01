@@ -121,6 +121,7 @@ struct passwd {
 static ssize_t stdin_read(int fd, void *buf, size_t count) {
     (void)fd;
     unsigned char *ptr = buf;
+    unsigned char ch;
     size_t i;
     
     if (count == 0) {
@@ -131,7 +132,11 @@ static ssize_t stdin_read(int fd, void *buf, size_t count) {
     while ((*CONSOLE_UART_RX_STATUS & 0x01) == 0) {
         /* Wait for first byte */
     }
-    ptr[0] = *CONSOLE_UART_RX;
+    ch = *CONSOLE_UART_RX;
+    if (ch == '\r') {
+        ch = '\n';
+    }
+    ptr[0] = ch;
     
     /* Read remaining bytes non-blocking (return partial read if no more data) */
     for (i = 1; i < count; i++) {
@@ -140,7 +145,11 @@ static ssize_t stdin_read(int fd, void *buf, size_t count) {
             /* No more data - return what we got */
             return i;
         }
-        ptr[i] = *CONSOLE_UART_RX;
+        ch = *CONSOLE_UART_RX;
+        if (ch == '\r') {
+            ch = '\n';
+        }
+        ptr[i] = ch;
     }
     
     return count;

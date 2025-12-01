@@ -66,6 +66,8 @@ Always keep going — GO GO GO!
   * Use sim_run_until_console_status_read to detect input prompts
   * Inject name, role, race, gender, alignment inputs
   * Verify character creation completes successfully
+  * Regenerated `include/onames.h` with PYRV32 config and rebuilt NetHack to fix init_objects prob mismatch
+  * Fixed TLS thread-pointer setup in `firmware/crt0.S` so libc TLS buffers (errno/localtime) stop trampling env data
 - [ ] **Play through to Level 2** - Character creation → explore Level 1 → descend stairs
 
 ---
@@ -168,6 +170,15 @@ Always keep going — GO GO GO!
 ### Perm Lock Cleanup Automation (Dec 1, 2025)
 - Added fs_root tracking in `RV32System` and automatic `_lock` cleanup in `SessionManager` before creating new sessions.
 - Removes stale `perm_lock` hard links under `usr/games/lib/nethackdir/`, preventing NetHack from stalling on character creation retries after an unclean shutdown.
+
+### ELF-only NetHack Makefiles (Dec 1, 2025)
+- Updated `sys/pyrv32/Makefile.top`, `Makefile.src`, and `Makefile.utl` to drop `.bin` targets entirely and point all messaging/cleanup at the `.elf` deliverables.
+- Utility `generated-files` target now reuses archived data via `install` without producing unused binaries.
+- Top-level build instructions now direct MCP users to load `src/nethack.elf`, matching the simulator's ELF-only workflow.
+
+### stdin_read CR→LF Normalization (Dec 1, 2025)
+- Console injection path only delivers carriage returns, so the firmware now translates `\r` to `\n` before handing bytes to newlib.
+- Ensures NetHack sees proper newline terminators during character creation prompts without requiring MCP-side hacks.
 
 ---
 

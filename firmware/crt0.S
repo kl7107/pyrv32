@@ -18,10 +18,10 @@ _start:
     addi sp, sp, %lo(__stack_top)
     
     /* Set up thread pointer for TLS (Thread Local Storage) */
-    /* tp must point PAST the end of all TLS data (.tdata + .tbss) */
-    /* For RISC-V, tp should point to __tbss_end (end of all TLS) */
-    lui  tp, %hi(__tbss_end)
-    addi tp, tp, %lo(__tbss_end)
+    /* RISC-V TLS expects TP to point to the start of the TLS block */
+    /* so that each symbol uses tp-relative positive offsets */
+    lui  tp, %hi(__tdata_start)
+    addi tp, tp, %lo(__tdata_start)
     
     /* Clear BSS section (uninitialized data) */
     lui  t0, %hi(__bss_start)

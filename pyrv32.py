@@ -366,7 +366,7 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
     print("=" * 60)
     
     cpu = RV32CPU()
-    mem = Memory()
+    mem = Memory(use_console_pty=True)
     cpu.pc = start_addr
     
     # Initialize syscall handler with filesystem root
@@ -574,6 +574,11 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         print(f"  TIMER: 0x10000004 (millisecond timer, read-only)")
         print(f"{'=' * 60}")
         sys.exit(1)
+    
+    except NotImplementedError as e:
+        print(f"\n{'=' * 60}")
+        print(f"NotImplementedError: {e}")
+        print(f"{'=' * 60}")
     
     if step >= max_steps:
         print(f"\nWarning: Stopped after {max_steps} instructions (safety limit)")
