@@ -10,10 +10,10 @@ Do not stop working with comments like these: "NetHack is fully built and ready 
 
 When testing NetHack, always use MCP, not scripts.
 
-**CRITICAL: FIRST COMMAND after sim_load_elf MUST be sim_add_read_watchpoint at 0x10001008**
-This prevents the simulator from burning millions of cycles in polling loops.
-NetHack checks this address when waiting for input - breaking here is HOW you know when to inject input.
-Without this watchpoint, sim_run will waste 500k-1M instructions doing nothing but polling.
+**CRITICAL: AFTER sim_load_elf immediately call sim_run_until_console_status_read()**
+This helper now owns the 0x10001008 watchpoint lifecycle for you and halts exactly when NetHack polls for input.
+Using it as the very next command prevents the simulator from burning millions of cycles in the polling loop and keeps the RX prompt workflow deterministic.
+Skipping this step will leave you blind to input requests and waste 500k-1M instructions doing nothing.
 
 **ALWAYS USE SYMBOLIC DEBUGGING WHEN DEBUGGING:**
 - `sim_get_symbol_info(pc)` - See "function+offset" instead of raw hex
@@ -29,10 +29,7 @@ Without this watchpoint, sim_run will waste 500k-1M instructions doing nothing b
 
 Always keep this TODO.md file updated, focused, clean, organized and terse. Do not litter the repo with tons of new MD files. New MD files are OK if they add value, but so far we have 20x as many as we should.
 
-Direction:
-
-* Review the MCP server code for redundancy - especially the console UART write/inject
-* Always keep going, GO GO GO!
+Always keep going — GO GO GO!
 
 **END OF READ-ONLY USER INSTRUCTIONS**
 
@@ -78,6 +75,7 @@ Direction:
 - [ ] Add `argv`/`envp` support to MCP tools (CLI has it, MCP doesn't)
 - [ ] Update main README with NetHack build/play instructions
 - [ ] Document syscall implementation status matrix
+- [ ] Review MCP server console UART write/inject path for redundancy
 
 ---
 
@@ -208,32 +206,6 @@ Direction:
 
 ---
 
-## 📊 Project Status
-
-### Build Status
-- **NetHack Binary:** ✅ 1.7MB (1.69M text + 46K data + 80K BSS)
-- **Runtime Files:** ✅ 126/126 complete
-- **Utilities:** ✅ All built and tested
-- **Infrastructure:** ✅ Fully functional
-
-### What Works
-- ✅ Complete Unix-compatible runtime environment
-- ✅ File I/O (open, read, write, close, lseek, freopen)
-- ✅ Terminal control (tcgetattr, tcsetattr, ioctl)
-- ✅ Command-line arguments (argc/argv/envp)
-- ✅ Standard I/O with buffering
-- ✅ All NetHack data file generation
-
-### Known Status
-- ⏸️ **NetHack awaits interactive input** - Game initializes correctly but needs terminal I/O
-- ✅ No crashes or errors during initialization
-- ✅ All data files load successfully
-- ⚠️ Interactive mode not yet tested
-
----
-
-## ✅ Recently Completed (Nov 30, 2025)
-
 ### Symbolic Debugging Support (Nov 30, 2025)
 - **Symbol table extraction** - Parse and store ELF symbols for debugging
   * Extract .symtab section during ELF loading
@@ -320,6 +292,30 @@ Direction:
 - **Updated copilot-instructions.md** - Workflow now uses `sim_add_read_watchpoint` for 0x10001008
 
 ---
+
+## 📊 Project Status
+
+### Build Status
+- **NetHack Binary:** ✅ 1.7MB (1.69M text + 46K data + 80K BSS)
+- **Runtime Files:** ✅ 126/126 complete
+- **Utilities:** ✅ All built and tested
+- **Infrastructure:** ✅ Fully functional
+
+### What Works
+- ✅ Complete Unix-compatible runtime environment
+- ✅ File I/O (open, read, write, close, lseek, freopen)
+- ✅ Terminal control (tcgetattr, tcsetattr, ioctl)
+- ✅ Command-line arguments (argc/argv/envp)
+- ✅ Standard I/O with buffering
+- ✅ All NetHack data file generation
+
+### Known Status
+- ⏸️ **NetHack awaits interactive input** - Game initializes correctly but needs terminal I/O
+- ✅ No crashes or errors during initialization
+- ✅ All data files load successfully
+- ⚠️ Interactive mode not yet tested
+
+----
 
 ## 📝 Notes
 

@@ -9,7 +9,7 @@
    - Memory inspection (MCP read_memory)
    - Register inspection (MCP get_registers)
    - Breakpoints at fault addresses
-   - Always set a memory read breakpoint on the console RX status check register (0x10001008 right now), so that the sim will break immediately when you need to provide input.
+   - Always use `sim_run_until_console_status_read()` right after loading NetHack; it manages the 0x10001008 read watchpoint for you and halts exactly when the game polls for input.
    - Trace execution leading to failure
 5. **Exhaust ALL debugging approaches** before asking for help:
    - Check syscall parameters
@@ -109,19 +109,18 @@ When you need to debug or test:
 **Execute these steps IN ORDER every time you test NetHack:**
 1. Create session (sim_create)
 2. Load ELF (sim_load_elf with nethack-3.4.3/src/nethack.elf)
-3. **SET READ WATCHPOINT at 0x10001008** (sim_add_read_watchpoint) ← NEVER SKIP THIS STEP
-4. Run (sim_run with max_steps=1000000)
-5. When stopped at watchpoint:
+3. **Immediately call sim_run_until_console_status_read()** ← NEVER SKIP THIS STEP
+4. When the helper halts on the internal 0x10001008 watchpoint:
    - Check screen (sim_get_screen)
    - Get PC and use sim_get_symbol_info to see what function you're in
    - Use sim_disassemble around PC to see the code
-6. Inject input (sim_console_uart_write)
-7. Continue from step 4
+5. Inject input (sim_console_uart_write)
+6. Continue from step 3 (run_until again, observe, inject, repeat)
 
-**If you find yourself running sim_run without a read watchpoint set, STOP immediately.**
+**If you find yourself running sim_run without guarding with sim_run_until_console_status_read(), STOP immediately.**
 
 ## Common Mistakes to AVOID:
-- ❌ Running sim_run before setting the 0x10001008 read watchpoint (burns cycles in polling loop)
+- ❌ Running sim_run (or any long run) before calling sim_run_until_console_status_read()
 - ❌ Running sim_run with no input in buffer when NetHack is waiting for input
 - ❌ Enabling trace buffer and then running 500k+ steps (massive overhead)
 - ❌ Using max_steps > 1M without a specific reason
