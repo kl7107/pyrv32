@@ -16,7 +16,6 @@ Usage:
 import sys
 import argparse
 import time
-import io
 from cpu import RV32CPU
 from memory import Memory
 from decoder import decode_instruction, get_instruction_name
@@ -27,51 +26,24 @@ import os
 from pathlib import Path
 from debugger import Debugger
 from syscalls import SyscallHandler
-from elftools.elf.elffile import ELFFile
+from elf_loader import load_elf_image
 
 
 def load_elf_program(memory, elf_bytes):
     """Load an ELF image into memory and return metadata."""
-    elf_file = ELFFile(io.BytesIO(elf_bytes))
-
-    if elf_file.header['e_machine'] != 'EM_RISCV':
-        raise ValueError(f"Unsupported ELF machine: {elf_file.header['e_machine']}")
-    if elf_file.elfclass != 32:
-        raise ValueError(f"Unsupported ELF class: {elf_file.elfclass} (expected 32-bit)")
-
-    entry_point = elf_file.header['e_entry']
-    bytes_loaded = 0
-    segments = []
-
-    for segment in elf_file.iter_segments():
-        if segment['p_type'] != 'PT_LOAD':
-            continue
-
-        vaddr = segment['p_vaddr']
-        filesz = segment['p_filesz']
-        memsz = segment['p_memsz']
-        flags = segment['p_flags']
-
-        if filesz:
-            memory.load_program(vaddr, segment.data())
-        if memsz > filesz:
-            memory.load_program(vaddr + filesz, [0] * (memsz - filesz))
-
-        bytes_loaded += memsz
-        segments.append({
-            'vaddr': vaddr,
-            'filesz': filesz,
-            'memsz': memsz,
-            'flags': flags
-        })
-
-    if not segments:
-        raise ValueError("ELF file contains no loadable PT_LOAD segments")
-
+    result = load_elf_image(memory, elf_bytes)
+    segments = [{
+        'vaddr': seg.vaddr,
+        'filesz': seg.filesz,
+        'memsz': seg.memsz,
+        'flags': seg.flags
+    } for seg in result.segments]
     return {
-        'entry_point': entry_point,
-        'bytes_loaded': bytes_loaded,
-        'segments': segments
+        'entry_point': result.entry_point,
+        'bytes_loaded': result.bytes_loaded,
+        'segments': segments,
+        'symbols': result.symbols,
+        'reverse_symbols': result.reverse_symbols
     }
 
 

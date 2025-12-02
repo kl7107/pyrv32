@@ -75,6 +75,10 @@ Always keep going — GO GO GO!
 
 ## 🔥 High Priority
 
+- [ ] Verify shared ELF loader via CLI and MCP
+  * Run NetHack via `pyrv32.py` and via `sim_load_elf` to confirm both entry points behave identically post-refactor.
+- [ ] Surface ELF metadata through MCP
+  * Add MCP tooling to fetch symbol tables/segment data exposed by `load_elf_image()` for automation consumers.
 - [ ] Add `argv`/`envp` support to MCP tools (CLI has it, MCP doesn't)
 - [ ] Update main README with NetHack build/play instructions
 - [ ] Document syscall implementation status matrix
@@ -85,6 +89,8 @@ Always keep going — GO GO GO!
 
 ## ⚠️ Medium Priority
 
+- [ ] Cache objdump -d -S output for MCP
+  * Generate full disasm+source dumps once, index by address range, and expose lookups via MCP tools to simplify remote debugging.
 - [ ] Clean up temporary debug scripts (analyze_*.py, debug_*.py, etc.)
 - [ ] Add regression tests for freopen() and stdio buffering
 - [ ] Improve MCP error reporting for syscall failures
@@ -165,6 +171,12 @@ Always keep going — GO GO GO!
 - [ ] Two-step dungeon generation docs
 
 ---
+
+## ✅ Recently Completed (Dec 2, 2025)
+
+### Unified ELF Handling
+- Added `elf_loader.py` helper to centralize ELF parsing, segment loading, and symbol extraction.
+- Updated `pyrv32.py` CLI loader and `RV32System.load_elf()` to consume the shared helper so both paths enforce the same RISC-V/ELF32 validation and expose consistent segment metadata.
 
 ## ✅ Recently Completed (Dec 1, 2025)
 

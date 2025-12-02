@@ -13,7 +13,7 @@ from execute import execute_instruction
 from exceptions import EBreakException, ECallException, MemoryAccessFault
 from debugger import Debugger
 from syscalls import SyscallHandler
-from elftools.elf.elffile import ELFFile
+from elf_loader import load_elf_image
 
 
 class ExecutionResult:
@@ -82,75 +82,25 @@ class RV32System:
                 - entry_point: ELF entry point address
                 - segments: List of loaded segments (vaddr, size)
         """
-        with open(elf_path, 'rb') as f:
-            elf = ELFFile(f)
-            
-            # Verify RISC-V architecture
-            if elf.header['e_machine'] != 'EM_RISCV':
-                raise ValueError(f"ELF file is not RISC-V (machine={elf.header['e_machine']})")
-            
-            # Verify 32-bit
-            if elf.elfclass != 32:
-                raise ValueError(f"ELF file is not 32-bit (class={elf.elfclass})")
-            
-            entry_point = elf.header['e_entry']
-            bytes_loaded = 0
-            segments = []
-            
-            # Load all PT_LOAD segments
-            for segment in elf.iter_segments():
-                if segment['p_type'] == 'PT_LOAD':
-                    vaddr = segment['p_vaddr']
-                    memsz = segment['p_memsz']
-                    filesz = segment['p_filesz']
-                    data = segment.data()
-                    
-                    # Load file data
-                    if filesz > 0:
-                        self.memory.load_program(vaddr, list(data))
-                        bytes_loaded += filesz
-                    
-                    # Zero-fill BSS (memsz > filesz)
-                    if memsz > filesz:
-                        zero_size = memsz - filesz
-                        zero_data = [0] * zero_size
-                        self.memory.load_program(vaddr + filesz, zero_data)
-                        bytes_loaded += zero_size
-                    
-                    segments.append({
-                        'vaddr': vaddr,
-                        'memsz': memsz,
-                        'filesz': filesz,
-                        'flags': segment['p_flags']
-                    })
-            
-            # Extract symbol table
-            self.symbols = {}
-            self.reverse_symbols = {}
-            self.elf_path = elf_path
-            
-            symtab = elf.get_section_by_name('.symtab')
-            if symtab:
-                for symbol in symtab.iter_symbols():
-                    name = symbol.name
-                    addr = symbol['st_value']
-                    
-                    # Only store valid symbols with names and addresses
-                    if name and addr != 0:
-                        self.symbols[name] = addr
-                        # For reverse lookup, prefer function names over other symbols
-                        if addr not in self.reverse_symbols or symbol['st_info']['type'] == 'STT_FUNC':
-                            self.reverse_symbols[addr] = name
-            
-            # Set PC to entry point
-            self.cpu.pc = entry_point
-            
-            return {
-                'bytes_loaded': bytes_loaded,
-                'entry_point': entry_point,
-                'segments': segments,
-                'symbols_loaded': len(self.symbols)
-            }
+        result = load_elf_image(self.memory, elf_path)
+        self.symbols = result.symbols
+        self.reverse_symbols = result.reverse_symbols
+        self.elf_path = elf_path
+        self.cpu.pc = result.entry_point
+
+        segments = [{
+            'vaddr': seg.vaddr,
+            'memsz': seg.memsz,
+            'filesz': seg.filesz,
+            'flags': seg.flags
+        } for seg in result.segments]
+
+        return {
+            'bytes_loaded': result.bytes_loaded,
+            'entry_point': result.entry_point,
+            'segments': segments,
+            'symbols_loaded': len(self.symbols)
+        }
     
     def lookup_symbol(self, name):
         """
