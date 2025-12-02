@@ -6,6 +6,8 @@ Encapsulates CPU, Memory, Syscalls, and Debugger into a controllable system.
 Designed for programmatic control (MCP, testing, automation).
 """
 
+import os
+
 from cpu import RV32CPU
 from memory import Memory
 from decoder import decode_instruction, get_instruction_name
@@ -69,7 +71,7 @@ class RV32System:
         self.last_load_info = None  # Cached metadata from last ELF load
         self.disasm_cache = DisasmCache()
     
-    def load_elf(self, elf_path):
+    def load_elf(self, elf_path, argv=None, envp=None):
         """
         Load an ELF file into memory.
         
@@ -106,6 +108,13 @@ class RV32System:
             'symbols_loaded': len(self.symbols)
         }
         self.last_load_info = info
+        if argv is not None or envp is not None:
+            arg_info = self._setup_program_arguments(argv or [], envp or [])
+            info['argc'] = arg_info['argc']
+            info['argv'] = arg_info['argv_list']
+            info['envp'] = arg_info['envp_list']
+            info['argv_addr'] = arg_info['argv_addr']
+            info['envp_addr'] = arg_info['envp_addr']
         try:
             self.disasm_cache.build_cache(elf_path)
         except Exception as exc:
@@ -113,6 +122,74 @@ class RV32System:
         else:
             info['disasm_cache'] = 'ready'
         return info
+
+    def _setup_program_arguments(self, extra_argv=None, envp=None):
+        """Write argc/argv/envp blocks into memory and set argument registers."""
+        if not self.memory:
+            raise RuntimeError("Memory not initialized")
+
+        extra_argv = list(extra_argv or [])
+        envp = list(envp or [])
+        prog_name = os.path.basename(self.elf_path) if self.elf_path else "program"
+        arg_area = 0x8001F000
+        offset = 0
+        argv_ptrs = []
+
+        def write_c_string(base_addr, text):
+            data = text.encode() + b"\x00"
+            for idx, byte in enumerate(data):
+                self.memory.write_byte(base_addr + idx, byte)
+            return len(data)
+
+        # Program name first
+        offset += write_c_string(arg_area + offset, prog_name)
+        argv_ptrs.append(arg_area)
+
+        # Additional argv entries
+        for arg in extra_argv:
+            entry_addr = arg_area + offset
+            offset += write_c_string(entry_addr, arg)
+            argv_ptrs.append(entry_addr)
+
+        # Align to 4-byte boundary before pointer arrays
+        offset = (offset + 3) & ~3
+
+        # Write env strings and record pointers
+        envp_ptrs = []
+        for env_var in envp:
+            entry_addr = arg_area + offset
+            offset += write_c_string(entry_addr, env_var)
+            envp_ptrs.append(entry_addr)
+
+        offset = (offset + 3) & ~3
+
+        # argv pointer array
+        argv_array_addr = arg_area + offset
+        for idx, ptr in enumerate(argv_ptrs):
+            self.memory.write_word(argv_array_addr + idx * 4, ptr)
+        self.memory.write_word(argv_array_addr + len(argv_ptrs) * 4, 0)
+        offset += (len(argv_ptrs) + 1) * 4
+
+        # envp pointer array
+        envp_array_addr = arg_area + offset
+        for idx, ptr in enumerate(envp_ptrs):
+            self.memory.write_word(envp_array_addr + idx * 4, ptr)
+        self.memory.write_word(envp_array_addr + len(envp_ptrs) * 4, 0)
+
+        argc = len(argv_ptrs)
+        argv_list = [prog_name] + extra_argv
+        envp_list = envp
+        self.cpu.regs[10] = argc
+        self.cpu.regs[11] = argv_array_addr
+        self.cpu.regs[12] = envp_array_addr
+
+        return {
+            'argc': argc,
+            'argv_addr': argv_array_addr,
+            'envp_addr': envp_array_addr,
+            'argv_list': argv_list,
+            'envp_list': envp_list
+        }
     
     def lookup_symbol(self, name):
         """

@@ -172,7 +172,9 @@ class MCPSimulatorServer:
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "Session identifier"},
-                        "elf_path": {"type": "string", "description": "Path to RISC-V ELF file"}
+                        "elf_path": {"type": "string", "description": "Path to RISC-V ELF file"},
+                        "argv": {"type": "array", "description": "Optional argv list (excluding program name)", "items": {"type": "string"}},
+                        "envp": {"type": "array", "description": "Optional environment variables (VAR=VALUE)", "items": {"type": "string"}}
                     },
                     "required": ["session_id", "elf_path"]
                 }
@@ -612,7 +614,9 @@ class MCPSimulatorServer:
             
             # ELF loading
             if name == "sim_load_elf":
-                result = session.load_elf(arguments["elf_path"])
+                argv = arguments.get("argv")
+                envp = arguments.get("envp")
+                result = session.load_elf(arguments["elf_path"], argv=argv, envp=envp)
                 text = f"Loaded ELF: {arguments['elf_path']}\n"
                 text += f"Entry point: 0x{result['entry_point']:08x}\n"
                 text += f"Bytes loaded: {result['bytes_loaded']}\n"
@@ -620,6 +624,10 @@ class MCPSimulatorServer:
                 text += f"Segments: {len(result['segments'])}\n"
                 for i, seg in enumerate(result['segments']):
                     text += f"  Segment {i}: vaddr=0x{seg['vaddr']:08x} memsz={seg['memsz']} filesz={seg['filesz']} flags=0x{seg['flags']:x}\n"
+                if 'argc' in result:
+                    text += f"argc: {result['argc']}\n"
+                    text += f"argv: {result.get('argv', [])}\n"
+                    text += f"envp: {result.get('envp', [])}\n"
                 return [{"type": "text", "text": text}]
             
             elif name == "sim_reset":
@@ -671,6 +679,10 @@ class MCPSimulatorServer:
                 text += f"Segments ({len(info['segments'])}):\n"
                 for i, seg in enumerate(info['segments']):
                     text += f"  {i}: vaddr=0x{seg['vaddr']:08x} memsz={seg['memsz']} filesz={seg['filesz']} flags=0x{seg['flags']:x}\n"
+                if 'argc' in info:
+                    text += f"argc: {info['argc']}\n"
+                    text += f"argv: {info.get('argv', [])}\n"
+                    text += f"envp: {info.get('envp', [])}\n"
                 return [{"type": "text", "text": text.rstrip()}]
             
             # Debug UART

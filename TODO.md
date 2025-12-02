@@ -82,7 +82,9 @@ Always keep going — GO GO GO!
 - [x] Debug NetHack save/restore failure ✅ Dec 2, 2025
   * MCP automation reproduced the "Saving... Cannot open save file" error; root cause was missing `usr/games/lib/nethackdir/save/` directory in `pyrv32_sim_fs`.
   * Added the directory and verified that saving now creates `save/0Saver_` and launching a new session restores the save (console shows "Restoring save file...").
-- [ ] Add `argv`/`envp` support to MCP tools (CLI has it, MCP doesn't)
+- [x] Add `argv`/`envp` support to MCP tools (CLI has it, MCP doesn't)
+  * `sim_load_elf` now accepts optional `argv`/`envp` arrays and `RV32System.load_elf()` wires them into memory/registers just like the CLI path.
+  * Metadata surfaced via `sim_load_elf`/`sim_get_load_info` includes argc/argv/envp, and `firmware/test_argvenvp.elf` passes under MCP with injected arguments/env values.
 - [ ] Update main README with NetHack build/play instructions
 - [ ] Document syscall implementation status matrix
 - [ ] Review MCP server console UART write/inject path for redundancy
