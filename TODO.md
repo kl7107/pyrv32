@@ -182,6 +182,9 @@ Always keep going — GO GO GO!
 
 ## ✅ Recently Completed (Dec 2, 2025)
 
+### NetHack Rebuild Validation
+- Rebuilt `nethack-3.4.3/src` after the toolchain consolidation, confirming the shared `toolchain.mk` overrides select the RV32 cross tools even when environment variables are unset; `nethack.elf` now links cleanly and `riscv64-unknown-elf-size` publishes the final image size without manual intervention.
+
 ### Unified ELF Handling
 - Added `elf_loader.py` helper to centralize ELF parsing, segment loading, and symbol extraction.
 - Updated `pyrv32.py` CLI loader and `RV32System.load_elf()` to consume the shared helper so both paths enforce the same RISC-V/ELF32 validation and expose consistent segment metadata.

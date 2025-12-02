@@ -4,10 +4,31 @@
 #   include $(PYRV32_THIS_DIR)/toolchain.mk
 
 PREFIX_CROSS ?= riscv64-unknown-elf
-CC ?= $(PREFIX_CROSS)-gcc
-AR ?= $(PREFIX_CROSS)-ar
-SIZE ?= $(PREFIX_CROSS)-size
-LINK ?= $(CC)
+
+ifeq ($(origin CC), default)
+CC := $(PREFIX_CROSS)-gcc
+endif
+ifeq ($(origin CC), undefined)
+CC := $(PREFIX_CROSS)-gcc
+endif
+ifeq ($(origin AR), default)
+AR := $(PREFIX_CROSS)-ar
+endif
+ifeq ($(origin AR), undefined)
+AR := $(PREFIX_CROSS)-ar
+endif
+ifeq ($(origin SIZE), default)
+SIZE := $(PREFIX_CROSS)-size
+endif
+ifeq ($(origin SIZE), undefined)
+SIZE := $(PREFIX_CROSS)-size
+endif
+ifeq ($(origin LINK), default)
+LINK := $(CC)
+endif
+ifeq ($(origin LINK), undefined)
+LINK := $(CC)
+endif
 
 ARCH_FLAGS ?= -march=rv32im -mabi=ilp32
 
