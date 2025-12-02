@@ -6,36 +6,19 @@
 #	  2. Cross-compile those C files for RV32 using picolibc
 #	  3. Link with firmware syscalls for file I/O
 
-# Cross-compilation toolchain
-CC = riscv64-unknown-elf-gcc
-ARCH_FLAGS = -march=rv32im -mabi=ilp32
+PYRV32_THIS_DIR := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
+include $(PYRV32_THIS_DIR)/toolchain.mk
 
-# Paths
-FIRMWARE_DIR = ../../firmware
-PICOLIBC_INC = /usr/lib/picolibc/riscv64-unknown-elf/include
-PICOLIBC_LIB = /usr/lib/picolibc/riscv64-unknown-elf/lib/rv32im/ilp32
-
-# Compiler flags for RV32
-CFLAGS = $(ARCH_FLAGS) -O2 -g -Wall \
-         -I../include \
-         -I../../firmware/include \
-         -isystem $(PICOLIBC_INC) \
-         -ffunction-sections -fdata-sections \
-         -DPYRV32
+# Compiler flags for RV32 utilities
+CFLAGS = $(PYRV32_COMMON_CFLAGS) \
+		 -I../include \
+		 -I$(PLATFORM_INC)
 
 # Linker flags
-LDFLAGS = $(ARCH_FLAGS) \
-          -T$(FIRMWARE_DIR)/link.ld \
-          -L$(PICOLIBC_LIB) \
-          -Wl,--gc-sections \
-          -Wl,-Map=$@.map \
-          -nostartfiles -nodefaultlibs
+LDFLAGS = $(PYRV32_COMMON_LDFLAGS) \
+		  -Wl,-Map=$@.map
 
 LIBS = -lc -lgcc
-
-# Startup and syscall support
-CRT0 = $(FIRMWARE_DIR)/crt0.o
-SYSCALLS = $(FIRMWARE_DIR)/syscalls.o
 
 # yacc/lex programs (run on HOST to generate C source)
 YACC = bison -y
@@ -56,8 +39,8 @@ all: makedefs.elf lev_comp.elf dgn_comp.elf
 
 MAKEOBJS = makedefs.o monst.o objects.o
 
-makedefs.elf: $(MAKEOBJS) $(CRT0) $(SYSCALLS)
-	$(CC) $(LDFLAGS) -o $@ $(CRT0) $(SYSCALLS) $(MAKEOBJS) $(LIBS)
+makedefs.elf: $(MAKEOBJS) $(RUNTIME_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(RUNTIME_OBJS) $(MAKEOBJS) $(LIBS)
 	@echo "Built makedefs.elf (RV32)"
 
 makedefs.o: makedefs.c
@@ -76,8 +59,8 @@ objects.o: ../src/objects.c
 LEVOBJS = lev_yacc.o lev_lex.o lev_main.o \
           alloc.o panic.o drawing.o decl.o monst.o objects.o
 
-lev_comp.elf: $(LEVOBJS) $(CRT0) $(SYSCALLS)
-	$(CC) $(LDFLAGS) -o $@ $(CRT0) $(SYSCALLS) $(LEVOBJS) $(LIBS)
+lev_comp.elf: $(LEVOBJS) $(RUNTIME_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(RUNTIME_OBJS) $(LEVOBJS) $(LIBS)
 	@echo "Built lev_comp.elf (RV32)"
 
 # Generate C source from yacc/lex (runs on HOST)
@@ -107,8 +90,8 @@ lev_main.o: lev_main.c
 DGNOBJS = dgn_yacc.o dgn_lex.o dgn_main.o \
           alloc.o panic.o
 
-dgn_comp.elf: $(DGNOBJS) $(CRT0) $(SYSCALLS)
-	$(CC) $(LDFLAGS) -o $@ $(CRT0) $(SYSCALLS) $(DGNOBJS) $(LIBS)
+dgn_comp.elf: $(DGNOBJS) $(RUNTIME_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(RUNTIME_OBJS) $(DGNOBJS) $(LIBS)
 	@echo "Built dgn_comp.elf (RV32)"
 
 # Generate C source from yacc/lex (runs on HOST)

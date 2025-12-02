@@ -3,43 +3,20 @@
 
 SHELL=/bin/sh
 
-# Cross-compilation setup
-PREFIX_CROSS = riscv64-unknown-elf
-CC = $(PREFIX_CROSS)-gcc
-AR = $(PREFIX_CROSS)-ar
-SIZE = $(PREFIX_CROSS)-size
-LINK = $(CC)
+PYRV32_THIS_DIR := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
+include $(PYRV32_THIS_DIR)/toolchain.mk
 
-# Architecture flags for RV32IM
-ARCH_FLAGS = -march=rv32im -mabi=ilp32
-
-# Picolibc paths
-PICOLIBC_INC = /usr/lib/picolibc/riscv64-unknown-elf/include
-PICOLIBC_LIB = /usr/lib/picolibc/riscv64-unknown-elf/lib/rv32im/ilp32
-
-# Platform firmware include path (OS-level headers)
-PLATFORM_INC = ../../firmware/include
-
-# Compiler flags
-CFLAGS = $(ARCH_FLAGS) -O2 -g -Wall \
+# Compiler flags (extend shared defaults with project includes)
+CFLAGS = $(PYRV32_COMMON_CFLAGS) \
 	-I$(PLATFORM_INC) \
-	-isystem $(PICOLIBC_INC) \
 	-I../sys/pyrv32/include \
-	-I../include -I../sys/pyrv32 \
-	-ffunction-sections -fdata-sections \
-	-DPYRV32
+	-I../include -I../sys/pyrv32
 
 # Automatic dependency generation flags
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
-# Linker script (shared from firmware) and flags
-LINKER_SCRIPT = $(FIRMWARE_PATH)/link.ld
-LDFLAGS = $(ARCH_FLAGS) \
-	-T$(LINKER_SCRIPT) \
-	-L$(PICOLIBC_LIB) \
-	-Wl,--gc-sections \
-	-Wl,-Map=$(GAME).map \
-	-nostartfiles -nodefaultlibs
+LDFLAGS = $(PYRV32_COMMON_LDFLAGS) \
+	-Wl,-Map=$(GAME).map
 
 # Libraries
 LIBS = -lc -lgcc
@@ -58,8 +35,7 @@ WINSRC = ../win/tty/getline.c ../win/tty/termcap.c ../win/tty/topl.c \
 WINOBJ = getline.o termcap.o topl.o wintty.o
 
 # Runtime objects (from firmware directory - built separately)
-FIRMWARE_PATH = ../../firmware
-RUNTIME_OBJS = $(FIRMWARE_PATH)/crt0.o $(FIRMWARE_PATH)/syscalls.o
+RUNTIME_OBJS = $(CRT0) $(SYSCALLS)
 
 # Random number generator (not needed - using picolibc)
 RANDOBJ =
@@ -193,7 +169,7 @@ wintty.o: ../win/tty/wintty.c
 	$(CC) $(CFLAGS) $(DEPFLAGS) -c $<
 
 # Runtime objects (built in firmware directory)
-$(FIRMWARE_PATH)/crt0.o $(FIRMWARE_PATH)/syscalls.o:
+$(CRT0) $(SYSCALLS):
 	@echo "ERROR: Runtime objects not found in $(FIRMWARE_PATH)/"
 	@echo "Please build crt0.o and syscalls.o in the firmware directory first."
 	@exit 1

@@ -196,6 +196,11 @@ Always keep going — GO GO GO!
 - Identified the missing `usr/games/lib/nethackdir/save/` directory that caused NetHack to print "Saving... Cannot open save file" and prevented restores.
 - Created the directory inside `pyrv32_sim_fs`, confirmed NetHack now writes `save/0Saver_`, and verified a fresh session prints "Restoring save file..." when the same hero name is entered.
 
+### NetHack Makefile Consolidation
+- Introduced `sys/pyrv32/toolchain.mk` so all PyRV32 builds share toolchain paths, runtime object lists, and default CFLAGS/LDFLAGS instead of duplicating them across `Makefile.src` and `Makefile.utl`.
+- Updated the src and util makefiles to include the shared fragment (using `realpath`-aware includes for symlink safety), trimmed redundant variables, and reused the common runtime object list when linking.
+- Verified the refactor by running `make clean` in both `nethack-3.4.3/src` and `nethack-3.4.3/util`, confirming the new include path parses correctly.
+
 ### Cached Disassembly for MCP
 - Implemented `objdump_cache.py` to cache `objdump -d -S` output per ELF file and serve address slices without re-running objdump.
 - Wired the cache into `RV32System.disassemble_cached()` and added the `sim_disasm_cached` MCP tool so assistants can fetch disassembly ranges quickly during debugging.
