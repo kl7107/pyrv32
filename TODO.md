@@ -95,6 +95,7 @@ Always keep going — GO GO GO!
 - [x] Cache objdump -d -S output for MCP
   * Added `objdump_cache.py` helper that materializes full `objdump -d -S` output keyed by ELF path, size, and mtime, then slices the cached text so repeated lookups avoid re-running objdump.
   * Integrated `DisasmCache` into `RV32System` and exposed `disassemble_cached()` so both CLI and MCP layers can reuse the same logic.
+  * Cache snapshots now build immediately when an ELF is loaded and stay fixed until another `sim_load_elf`, so MCP lookups never trigger objdump reruns mid-session even if the file changes on disk.
   * Added `sim_disasm_cached` MCP tool for fast range lookups using the cached disassembly output, returning the matching lines directly to clients.
 - [ ] Clean up temporary debug scripts (analyze_*.py, debug_*.py, etc.)
 - [ ] Add regression tests for freopen() and stdio buffering

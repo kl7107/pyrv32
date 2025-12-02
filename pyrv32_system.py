@@ -106,6 +106,12 @@ class RV32System:
             'symbols_loaded': len(self.symbols)
         }
         self.last_load_info = info
+        try:
+            self.disasm_cache.build_cache(elf_path)
+        except Exception as exc:
+            info['disasm_cache'] = f"Error building cache: {exc}"
+        else:
+            info['disasm_cache'] = 'ready'
         return info
     
     def lookup_symbol(self, name):

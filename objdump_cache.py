@@ -6,7 +6,6 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Iterable
 
 CACHE_ROOT = Path(os.environ.get("PYRV32_CACHE_DIR", Path.home() / ".cache")) / "pyrv32" / "disasm"
 _SYMBOL_RE = re.compile(r"^([0-9a-fA-F]+) <.+>:")
@@ -19,6 +18,7 @@ class DisasmCache:
     def __init__(self, cache_dir: Path | None = None):
         self.cache_dir = cache_dir or CACHE_ROOT
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_paths: dict[str, Path] = {}
 
     def _cache_key(self, elf_path: str) -> str:
         stat = os.stat(elf_path)
@@ -28,8 +28,8 @@ class DisasmCache:
     def _cache_path(self, key: str) -> Path:
         return self.cache_dir / f"{key}.txt"
 
-    def ensure_cache(self, elf_path: str) -> Path:
-        """Return path to cached objdump output, rebuilding if needed."""
+    def _ensure_cache(self, elf_path: str) -> Path:
+        """Return path to cached objdump output, rebuilding if missing."""
         key = self._cache_key(elf_path)
         cache_path = self._cache_path(key)
         if cache_path.exists():
@@ -49,12 +49,21 @@ class DisasmCache:
             )
         return cache_path
 
+    def build_cache(self, elf_path: str) -> Path:
+        """Create (or reuse) cache for ELF and remember it for future lookups."""
+        cache_path = self._ensure_cache(elf_path)
+        self._cache_paths[elf_path] = cache_path
+        return cache_path
+
     def get_range(self, elf_path: str, start_addr: int, end_addr: int) -> str:
         """Return cached disassembly between start/end addresses."""
         if end_addr <= start_addr:
             raise ValueError("end_addr must be greater than start_addr")
-
-        cache_path = self.ensure_cache(elf_path)
+        cache_path = self._cache_paths.get(elf_path)
+        if cache_path is None:
+            raise ValueError("No cached disassembly for this ELF. Reload it to rebuild cache.")
+        if not cache_path.exists():
+            raise FileNotFoundError("Cached disassembly file missing. Reload ELF to regenerate.")
         output_lines: list[str] = []
         pending_symbol: str | None = None
         in_range = False
