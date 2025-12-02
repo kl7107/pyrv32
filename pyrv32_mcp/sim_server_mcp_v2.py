@@ -265,6 +265,15 @@ class MCPSimulatorServer:
                 }
             },
             {
+                "name": "sim_get_load_info",
+                "description": "Get metadata about the last ELF loaded (entry point, segments, symbol count).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"session_id": {"type": "string", "description": "Session identifier"}},
+                    "required": ["session_id"]
+                }
+            },
+            {
                 "name": "sim_debug_uart_read",
                 "description": "Read available debug UART (0x10000000) output from simulator.",
                 "inputSchema": {
@@ -607,6 +616,7 @@ class MCPSimulatorServer:
                 text = f"Loaded ELF: {arguments['elf_path']}\n"
                 text += f"Entry point: 0x{result['entry_point']:08x}\n"
                 text += f"Bytes loaded: {result['bytes_loaded']}\n"
+                text += f"Symbols loaded: {result['symbols_loaded']}\n"
                 text += f"Segments: {len(result['segments'])}\n"
                 for i, seg in enumerate(result['segments']):
                     text += f"  Segment {i}: vaddr=0x{seg['vaddr']:08x} memsz={seg['memsz']} filesz={seg['filesz']} flags=0x{seg['flags']:x}\n"
@@ -649,6 +659,19 @@ class MCPSimulatorServer:
                 status = session.get_status()
                 text = f"PC: 0x{status['pc']:08x}\nInstructions: {status['instruction_count']}\nHalted: {status['halted']}\nConsole UART has output: {status['console_has_output']}"
                 return [{"type": "text", "text": text}]
+
+            elif name == "sim_get_load_info":
+                info = session.last_load_info
+                if not info:
+                    return [{"type": "text", "text": "No ELF has been loaded in this session"}]
+                text = f"ELF path: {info['elf_path']}\n"
+                text += f"Entry point: 0x{info['entry_point']:08x}\n"
+                text += f"Bytes loaded: {info['bytes_loaded']}\n"
+                text += f"Symbols loaded: {info['symbols_loaded']}\n"
+                text += f"Segments ({len(info['segments'])}):\n"
+                for i, seg in enumerate(info['segments']):
+                    text += f"  {i}: vaddr=0x{seg['vaddr']:08x} memsz={seg['memsz']} filesz={seg['filesz']} flags=0x{seg['flags']:x}\n"
+                return [{"type": "text", "text": text.rstrip()}]
             
             # Debug UART
             elif name == "sim_debug_uart_read":

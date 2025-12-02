@@ -75,10 +75,13 @@ Always keep going — GO GO GO!
 
 ## 🔥 High Priority
 
-- [ ] Verify shared ELF loader via CLI and MCP
-  * Run NetHack via `pyrv32.py` and via `sim_load_elf` to confirm both entry points behave identically post-refactor.
-- [ ] Surface ELF metadata through MCP
-  * Add MCP tooling to fetch symbol tables/segment data exposed by `load_elf_image()` for automation consumers.
+- [x] Verify shared ELF loader via CLI and MCP ✅ Dec 2, 2025
+  * Confirmed NetHack loads identically via `pyrv32.py --step` (auto-quit) and via MCP `sim_load_elf` followed by `sim_run_until_console_status_read`.
+- [x] Surface ELF metadata through MCP ✅ Dec 2, 2025
+  * Added `sim_get_load_info` MCP tool plus symbol-count reporting in `sim_load_elf`, backed by cached metadata in `RV32System`.
+- [x] Debug NetHack save/restore failure ✅ Dec 2, 2025
+  * MCP automation reproduced the "Saving... Cannot open save file" error; root cause was missing `usr/games/lib/nethackdir/save/` directory in `pyrv32_sim_fs`.
+  * Added the directory and verified that saving now creates `save/0Saver_` and launching a new session restores the save (console shows "Restoring save file...").
 - [ ] Add `argv`/`envp` support to MCP tools (CLI has it, MCP doesn't)
 - [ ] Update main README with NetHack build/play instructions
 - [ ] Document syscall implementation status matrix
@@ -91,6 +94,9 @@ Always keep going — GO GO GO!
 
 - [ ] Cache objdump -d -S output for MCP
   * Generate full disasm+source dumps once, index by address range, and expose lookups via MCP tools to simplify remote debugging.
+  * Store caches per ELF path (e.g., /tmp/objdump_cache/<hash>.txt) and return slices without re-running objdump for each query.
+  * Add MCP tool (e.g., `sim_disasm_cached`) that accepts start/end addresses and streams the cached lines to the client.
+  * Invalidate/rebuild cache automatically when a new ELF is loaded into the session.
 - [ ] Clean up temporary debug scripts (analyze_*.py, debug_*.py, etc.)
 - [ ] Add regression tests for freopen() and stdio buffering
 - [ ] Improve MCP error reporting for syscall failures
@@ -177,6 +183,16 @@ Always keep going — GO GO GO!
 ### Unified ELF Handling
 - Added `elf_loader.py` helper to centralize ELF parsing, segment loading, and symbol extraction.
 - Updated `pyrv32.py` CLI loader and `RV32System.load_elf()` to consume the shared helper so both paths enforce the same RISC-V/ELF32 validation and expose consistent segment metadata.
+
+### Loader Parity Validation
+- Verified NetHack loads identically via the CLI (`pyrv32.py --step nethack.elf`) and MCP (`sim_load_elf` + `sim_run_until_console_status_read`), ensuring the shared loader behaves the same across entry points.
+
+### MCP Load Metadata Tooling
+- Added cached load metadata inside `RV32System` plus a `sim_get_load_info` MCP tool (and symbol-count reporting in `sim_load_elf`) so assistants can query entry point, segment layout, and symbol counts on demand.
+
+### Save/Restore Path Stabilization
+- Identified the missing `usr/games/lib/nethackdir/save/` directory that caused NetHack to print "Saving... Cannot open save file" and prevented restores.
+- Created the directory inside `pyrv32_sim_fs`, confirmed NetHack now writes `save/0Saver_`, and verified a fresh session prints "Restoring save file..." when the same hero name is entered.
 
 ## ✅ Recently Completed (Dec 1, 2025)
 

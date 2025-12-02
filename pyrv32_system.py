@@ -65,6 +65,7 @@ class RV32System:
         self.symbols = {}  # name -> address
         self.reverse_symbols = {}  # address -> name
         self.elf_path = None  # Path to loaded ELF file
+        self.last_load_info = None  # Cached metadata from last ELF load
     
     def load_elf(self, elf_path):
         """
@@ -95,12 +96,15 @@ class RV32System:
             'flags': seg.flags
         } for seg in result.segments]
 
-        return {
+        info = {
+            'elf_path': elf_path,
             'bytes_loaded': result.bytes_loaded,
             'entry_point': result.entry_point,
             'segments': segments,
             'symbols_loaded': len(self.symbols)
         }
+        self.last_load_info = info
+        return info
     
     def lookup_symbol(self, name):
         """
