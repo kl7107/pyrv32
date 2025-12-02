@@ -184,6 +184,7 @@ Always keep going — GO GO GO!
 
 ### NetHack Rebuild Validation
 - Rebuilt `nethack-3.4.3/src` after the toolchain consolidation, confirming the shared `toolchain.mk` overrides select the RV32 cross tools even when environment variables are unset; `nethack.elf` now links cleanly and `riscv64-unknown-elf-size` publishes the final image size without manual intervention.
+- Rebuilt `nethack-3.4.3/util` (`makedefs`, `lev_comp`, `dgn_comp`) using the same shared toolchain fragment to ensure the utilities pick up the RV32 toolchain automatically; all three `.elf` binaries now link without invoking host tools.
 
 ### Unified ELF Handling
 - Added `elf_loader.py` helper to centralize ELF parsing, segment loading, and symbol extraction.
