@@ -92,11 +92,10 @@ Always keep going — GO GO GO!
 
 ## ⚠️ Medium Priority
 
-- [ ] Cache objdump -d -S output for MCP
-  * Generate full disasm+source dumps once, index by address range, and expose lookups via MCP tools to simplify remote debugging.
-  * Store caches per ELF path (e.g., /tmp/objdump_cache/<hash>.txt) and return slices without re-running objdump for each query.
-  * Add MCP tool (e.g., `sim_disasm_cached`) that accepts start/end addresses and streams the cached lines to the client.
-  * Invalidate/rebuild cache automatically when a new ELF is loaded into the session.
+- [x] Cache objdump -d -S output for MCP
+  * Added `objdump_cache.py` helper that materializes full `objdump -d -S` output keyed by ELF path, size, and mtime, then slices the cached text so repeated lookups avoid re-running objdump.
+  * Integrated `DisasmCache` into `RV32System` and exposed `disassemble_cached()` so both CLI and MCP layers can reuse the same logic.
+  * Added `sim_disasm_cached` MCP tool for fast range lookups using the cached disassembly output, returning the matching lines directly to clients.
 - [ ] Clean up temporary debug scripts (analyze_*.py, debug_*.py, etc.)
 - [ ] Add regression tests for freopen() and stdio buffering
 - [ ] Improve MCP error reporting for syscall failures
@@ -193,6 +192,10 @@ Always keep going — GO GO GO!
 ### Save/Restore Path Stabilization
 - Identified the missing `usr/games/lib/nethackdir/save/` directory that caused NetHack to print "Saving... Cannot open save file" and prevented restores.
 - Created the directory inside `pyrv32_sim_fs`, confirmed NetHack now writes `save/0Saver_`, and verified a fresh session prints "Restoring save file..." when the same hero name is entered.
+
+### Cached Disassembly for MCP
+- Implemented `objdump_cache.py` to cache `objdump -d -S` output per ELF file and serve address slices without re-running objdump.
+- Wired the cache into `RV32System.disassemble_cached()` and added the `sim_disasm_cached` MCP tool so assistants can fetch disassembly ranges quickly during debugging.
 
 ## ✅ Recently Completed (Dec 1, 2025)
 

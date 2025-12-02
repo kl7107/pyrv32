@@ -59,6 +59,19 @@ class MCPSimulatorServer:
                     print(f"Request: {method}")
                     
                     # Log received request
+            {
+                "name": "sim_disasm_cached",
+                "description": "Return cached objdump output between two addresses (faster for repeated lookups).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "start_addr": {"type": "string", "description": "Start address in hex"},
+                        "end_addr": {"type": "string", "description": "End address in hex"}
+                    },
+                    "required": ["session_id", "start_addr", "end_addr"]
+                }
+            }
                     timestamp = datetime.now().isoformat()
                     self._log(f"\n>>> RECV [{timestamp}]: {json.dumps(request, indent=2)}\n")
                     
@@ -842,6 +855,10 @@ class MCPSimulatorServer:
             
             elif name == "sim_disassemble":
                 output = session.disassemble(arguments["start_addr"], arguments["end_addr"])
+                return [{"type": "text", "text": output}]
+
+            elif name == "sim_disasm_cached":
+                output = session.disassemble_cached(arguments["start_addr"], arguments["end_addr"])
                 return [{"type": "text", "text": output}]
             
             elif name == "sim_get_trace":

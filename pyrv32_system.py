@@ -14,6 +14,7 @@ from exceptions import EBreakException, ECallException, MemoryAccessFault
 from debugger import Debugger
 from syscalls import SyscallHandler
 from elf_loader import load_elf_image
+from objdump_cache import DisasmCache
 
 
 class ExecutionResult:
@@ -66,6 +67,7 @@ class RV32System:
         self.reverse_symbols = {}  # address -> name
         self.elf_path = None  # Path to loaded ELF file
         self.last_load_info = None  # Cached metadata from last ELF load
+        self.disasm_cache = DisasmCache()
     
     def load_elf(self, elf_path):
         """
@@ -193,6 +195,24 @@ class RV32System:
                 return f"Error: objdump failed: {result.stderr}"
         except Exception as e:
             return f"Error: {e}"
+
+    def disassemble_cached(self, start_addr, end_addr):
+        """Return cached objdump output for the specified address range."""
+        if not self.elf_path:
+            return "Error: No ELF file loaded"
+
+        try:
+            start = int(start_addr, 16) if isinstance(start_addr, str) else int(start_addr)
+            end = int(end_addr, 16) if isinstance(end_addr, str) else int(end_addr)
+        except ValueError as exc:
+            return f"Error: invalid address - {exc}"
+
+        try:
+            return self.disasm_cache.get_range(self.elf_path, start, end)
+        except (ValueError, FileNotFoundError) as exc:
+            return f"Error: {exc}"
+        except Exception as exc:  # Catch subprocess failures
+            return f"Error running objdump: {exc}"
     
     def reset(self):
         """Reset the system to initial state"""
