@@ -200,6 +200,10 @@ Always keep going — GO GO GO!
 - Identified the missing `usr/games/lib/nethackdir/save/` directory that caused NetHack to print "Saving... Cannot open save file" and prevented restores.
 - Created the directory inside `pyrv32_sim_fs`, confirmed NetHack now writes `save/0Saver_`, and verified a fresh session prints "Restoring save file..." when the same hero name is entered.
 
+### Debugger Register Dump Polish
+- Refactored the CLI/debugger register dump to emit a 4×8 column-major table with aligned `abi(xN)` labels and placed the PC in the final slot for quick visual scans.
+- Updated `check_s4_at_reset.py` to parse the new `s4(x20)` display (while remaining backward compatible with legacy `s4=0x...` logs) so reset-time checks keep working without manual tweaks.
+
 ### NetHack Makefile Consolidation
 - Introduced `sys/pyrv32/toolchain.mk` so all PyRV32 builds share toolchain paths, runtime object lists, and default CFLAGS/LDFLAGS instead of duplicating them across `Makefile.src` and `Makefile.utl`.
 - Updated the src and util makefiles to include the shared fragment (using `realpath`-aware includes for symlink safety), trimmed redundant variables, and reused the common runtime object list when linking.

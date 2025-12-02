@@ -3,6 +3,7 @@
 Check s4 value at reset BEFORE executing any instructions
 """
 
+import re
 import subprocess
 import time
 
@@ -78,16 +79,20 @@ def main():
     print("ANALYSIS:")
     print("=" * 70)
     
+    legacy_pattern = re.compile(r's4=0x([0-9a-fA-F]+)')
+    table_pattern = re.compile(r's4\(x20\)\s*:\s*0x([0-9a-fA-F]+)')
     found_s4 = False
     for line in reg_output:
-        if 's4=' in line or 'x20' in line:
+        match = legacy_pattern.search(line) or table_pattern.search(line)
+        if match:
+            value = int(match.group(1), 16)
             print(f"\nFound s4 line: {line.rstrip()}")
             found_s4 = True
-            if 's4=0x80000000' in line:
+            if value == 0x80000000:
                 print("\n⚠️  s4 = 0x80000000 at RESET!")
                 print("    This is WRONG - registers should all be 0 at reset!")
                 print("    The CPU or memory is being initialized incorrectly!")
-            elif 's4=0x00000000' in line or 's4=0' in line:
+            elif value == 0:
                 print("\n✓  s4 = 0x00000000 at RESET (correct)")
                 print("    Now need to find when it changes to 0x80000000")
     

@@ -434,33 +434,65 @@ class Debugger:
     def format_registers(self, regs, pc, compact=True, show_nonzero_only=False):
         """Format register dump"""
         if compact:
-            lines = []
-            lines.append(f"PC=0x{pc:08x}  ra=0x{regs[1]:08x} sp=0x{regs[2]:08x} gp=0x{regs[3]:08x} tp=0x{regs[4]:08x}")
-            
-            # a0-a7
-            a_regs = [f"a{i}=0x{regs[10+i]:08x}" for i in range(8)]
+            reg_layout = [
+                ('ra', 1), ('sp', 2), ('gp', 3), ('tp', 4),
+                ('t0', 5), ('t1', 6), ('t2', 7),
+                ('s0', 8), ('s1', 9),
+                ('a0', 10), ('a1', 11), ('a2', 12), ('a3', 13),
+                ('a4', 14), ('a5', 15), ('a6', 16), ('a7', 17),
+                ('s2', 18), ('s3', 19), ('s4', 20), ('s5', 21),
+                ('s6', 22), ('s7', 23), ('s8', 24), ('s9', 25),
+                ('s10', 26), ('s11', 27),
+                ('t3', 28), ('t4', 29), ('t5', 30), ('t6', 31)
+            ]
+            entries = [(name, idx, regs[idx]) for name, idx in reg_layout]
+            entries.append(('pc', None, pc))
             if show_nonzero_only:
-                a_regs = [r for i, r in enumerate(a_regs) if regs[10+i] != 0]
-            if a_regs:
-                lines.append("          " + " ".join(a_regs))
-            
-            # t0-t6
-            t_regs = [f"t{i}=0x{regs[5+i]:08x}" for i in range(3)]
-            t_regs += [f"t{i+3}=0x{regs[28+i]:08x}" for i in range(4)]
-            if show_nonzero_only:
-                t_regs = [r for i, r in enumerate(t_regs) if (regs[5+i] if i < 3 else regs[25+i]) != 0]
-            if t_regs:
-                lines.append("          " + " ".join(t_regs))
-            
-            # s0-s11
-            s_regs = [f"s{i}=0x{regs[8+i]:08x}" for i in range(2)]
-            s_regs += [f"s{i+2}=0x{regs[18+i]:08x}" for i in range(10)]
-            if show_nonzero_only:
-                s_regs = [r for i, r in enumerate(s_regs) if (regs[8+i] if i < 2 else regs[16+i]) != 0]
-            if s_regs:
-                lines.append("          " + " ".join(s_regs))
-            
-            return "\n".join(lines)
+                entries = [entry for entry in entries if entry[2] != 0 or entry[0] == 'pc']
+                if not entries:
+                    return ""
+            columns = 4
+            rows = (len(entries) + columns - 1) // columns
+            total_slots = rows * columns
+            if len(entries) < total_slots:
+                entries.extend([None] * (total_slots - len(entries)))
+
+            def format_label(name, idx):
+                if name == 'pc':
+                    return 'PC'
+                return f"{name}(x{idx})"
+
+            formatted = []
+            for entry in entries:
+                if entry is None:
+                    formatted.append(None)
+                else:
+                    name, idx, value = entry
+                    formatted.append((format_label(name, idx), value))
+
+            label_width = 0
+            for item in formatted:
+                if item:
+                    label_width = max(label_width, len(item[0]))
+            if label_width == 0:
+                label_width = 1
+            cell_width = label_width + 12  # label + ': ' + 0xXXXXXXXX
+            blank_cell = " " * cell_width
+            rows_output = []
+            for row in range(rows):
+                cells = []
+                for col in range(columns):
+                    idx = col * rows + row
+                    item = formatted[idx]
+                    if item is None:
+                        cells.append(blank_cell)
+                    else:
+                        label, value = item
+                        cells.append(f"{label:<{label_width}}: 0x{value:08x}")
+                line = "  ".join(cells).rstrip()
+                if line:
+                    rows_output.append(line)
+            return "\n".join(rows_output)
         else:
             # Full format (4 columns)
             lines = [f"PC = 0x{pc:08x}"]
@@ -495,9 +527,8 @@ class Debugger:
         
         # Registers (compact format)
         reg_str = self.format_registers(entry.regs, entry.pc, compact=True, 
-                                        show_nonzero_only=show_nonzero_only)
-        # Skip the PC line since we already showed it
-        reg_lines = reg_str.split('\n')[1:]
+                        show_nonzero_only=show_nonzero_only)
+        reg_lines = reg_str.split('\n') if reg_str else []
         for line in reg_lines:
             lines.append(" " * 10 + line.strip())
         
@@ -598,14 +629,15 @@ def test_breakpoints():
         print(f"  {bp}")
     
     # Check breakpoints
+    regs = [0] * 32
     print("\nChecking addresses:")
-    result = mgr.check(0x80000100)
+    result = mgr.check(0x80000100, regs)
     print(f"  0x80000100: {result}")
     
-    result = mgr.check(0x80000300)
+    result = mgr.check(0x80000300, regs)
     print(f"  0x80000300: {result}")
     
-    result = mgr.check(0x80000200)
+    result = mgr.check(0x80000200, regs)
     print(f"  0x80000200: {result}")
     
     # Hit count
@@ -629,6 +661,7 @@ def test_debugger():
     print("=== Testing Debugger ===")
     
     dbg = Debugger()
+    regs = [0] * 32
     
     # Add some breakpoints
     dbg.bp_manager.add(0x80001000)
@@ -636,17 +669,17 @@ def test_debugger():
     
     # Test should_break
     print("Testing should_break:")
-    should_break, msg = dbg.should_break(0x80000500, 100)
+    should_break, msg = dbg.should_break(0x80000500, 100, regs)
     print(f"  PC=0x80000500: break={should_break}, msg={msg}")
     
-    should_break, msg = dbg.should_break(0x80001000, 200)
+    should_break, msg = dbg.should_break(0x80001000, 200, regs)
     print(f"  PC=0x80001000: break={should_break}, msg={msg}")
     
     # Test step mode
     print("\nTesting step mode:")
     dbg.set_step_mode(True, count=3)
     for i in range(5):
-        should_break, msg = dbg.should_break(0x80000000 + i*4, i)
+        should_break, msg = dbg.should_break(0x80000000 + i*4, i, regs)
         print(f"  Instruction {i}: break={should_break}, msg={msg}")
     
     # Test register formatting
