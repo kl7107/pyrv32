@@ -68,6 +68,7 @@ Always keep going — GO GO GO!
   * Verify character creation completes successfully
   * Regenerated `include/onames.h` with PYRV32 config and rebuilt NetHack to fix init_objects prob mismatch
   * Fixed TLS thread-pointer setup in `firmware/crt0.S` so libc TLS buffers (errno/localtime) stop trampling env data
+  * Added ELF loading support to `pyrv32.py` CLI so PTY runs can execute NetHack ELF directly (Dec 2, 2025)
 - [ ] **Play through to Level 2** - Character creation → explore Level 1 → descend stairs
 
 ---

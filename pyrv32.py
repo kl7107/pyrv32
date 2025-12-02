@@ -16,6 +16,7 @@ Usage:
 import sys
 import argparse
 import time
+import io
 from cpu import RV32CPU
 from memory import Memory
 from decoder import decode_instruction, get_instruction_name
@@ -26,6 +27,59 @@ import os
 from pathlib import Path
 from debugger import Debugger
 from syscalls import SyscallHandler
+from elftools.elf.elffile import ELFFile
+
+
+def load_elf_program(memory, elf_bytes):
+    """Load an ELF image into memory and return metadata."""
+    elf_file = ELFFile(io.BytesIO(elf_bytes))
+
+    if elf_file.header['e_machine'] != 'EM_RISCV':
+        raise ValueError(f"Unsupported ELF machine: {elf_file.header['e_machine']}")
+    if elf_file.elfclass != 32:
+        raise ValueError(f"Unsupported ELF class: {elf_file.elfclass} (expected 32-bit)")
+
+    entry_point = elf_file.header['e_entry']
+    bytes_loaded = 0
+    segments = []
+
+    for segment in elf_file.iter_segments():
+        if segment['p_type'] != 'PT_LOAD':
+            continue
+
+        vaddr = segment['p_vaddr']
+        filesz = segment['p_filesz']
+        memsz = segment['p_memsz']
+        flags = segment['p_flags']
+
+        if filesz:
+            memory.load_program(vaddr, segment.data())
+        if memsz > filesz:
+            memory.load_program(vaddr + filesz, [0] * (memsz - filesz))
+
+        bytes_loaded += memsz
+        segments.append({
+            'vaddr': vaddr,
+            'filesz': filesz,
+            'memsz': memsz,
+            'flags': flags
+        })
+
+    if not segments:
+        raise ValueError("ELF file contains no loadable PT_LOAD segments")
+
+    return {
+        'entry_point': entry_point,
+        'bytes_loaded': bytes_loaded,
+        'segments': segments
+    }
+
+
+def format_segment_flags(flags):
+    """Return human-readable RWX flag string for an ELF segment."""
+    mapping = [('R', 4), ('W', 2), ('X', 1)]
+    flag_str = ''.join(letter for letter, bit in mapping if flags & bit)
+    return flag_str or '-'
 
 
 def interactive_debugger_cli(cpu, mem, debugger, insn, step):
@@ -390,10 +444,10 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         debugger.enable_reg_trace(filename=reg_trace_file, interval=reg_trace_interval,
                                   nonzero_only=reg_trace_nonzero)
     
-    # Load binary file
+    # Load binary file (ELF-aware)
     try:
         with open(binary_path, 'rb') as f:
-            program_bytes = list(f.read())
+            file_bytes = f.read()
     except FileNotFoundError:
         print(f"Error: File not found: {binary_path}")
         sys.exit(1)
@@ -401,7 +455,19 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
         print(f"Error loading file: {e}")
         sys.exit(1)
     
-    mem.load_program(cpu.pc, program_bytes)
+    elf_info = None
+    program_size = 0
+    if file_bytes.startswith(b'\x7fELF'):
+        try:
+            elf_info = load_elf_program(mem, file_bytes)
+            cpu.pc = elf_info['entry_point']
+            program_size = elf_info['bytes_loaded']
+        except Exception as e:
+            print(f"Error parsing ELF: {e}")
+            sys.exit(1)
+    else:
+        mem.load_program(cpu.pc, file_bytes)
+        program_size = len(file_bytes)
     
     # Set up argc/argv/envp if provided
     if argv or envp:
@@ -483,8 +549,15 @@ def run_binary(binary_path, verbose=False, start_addr=0x80000000, pc_trace_inter
             mem.add_write_watchpoint(addr)
             print(f"Write watchpoint set at 0x{addr:08x}")
     
-    print(f"\nProgram loaded at 0x{cpu.pc:08x}")
-    print(f"Program size: {len(program_bytes)} bytes\n")
+    if elf_info:
+        print(f"\nDetected ELF binary (entry point 0x{cpu.pc:08x})")
+        print(f"Loaded {len(elf_info['segments'])} loadable segments:")
+        for seg in elf_info['segments']:
+            flags = format_segment_flags(seg['flags'])
+            print(f"  0x{seg['vaddr']:08x} memsz={seg['memsz']:7d}B filesz={seg['filesz']:7d}B flags={flags}")
+    else:
+        print(f"\nProgram loaded at 0x{cpu.pc:08x}")
+    print(f"Bytes loaded: {program_size} bytes\n")
     
     # Execute
     if verbose:
