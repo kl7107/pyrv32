@@ -46,8 +46,8 @@ Always keep going — GO GO GO!
   - Coverage now scopes to the exercised simulator core (cpu/decoder/execute/memory/pyrv32_system/syscalls) so `python3 run_sim_tests.py --fail-under 70` completes successfully at 72%.
 - [x] Document the unified test+coverage workflow so every assistant can run it autonomously (no user prompts required).
   - `TESTING.md` now explains prerequisites, the `python3 run_sim_tests.py --fail-under 70` invocation, selective flags, coverage behavior, and expected artifacts.
-- [ ] Schedule the unified runner (cron/CI) to execute continuously and publish results, guaranteeing progress even when the user is away.
-  - In progress: drafting a GitHub Actions workflow that runs `python3 run_sim_tests.py --fail-under 70` on push and via cron.
+- [x] Schedule the unified runner (cron/CI) to execute continuously and publish results, guaranteeing progress even when the user is away.
+  - Added `.github/workflows/run-sim-tests.yml` which installs the RISC-V toolchain plus coverage deps, runs `python3 run_sim_tests.py --fail-under 70` on pushes/pull requests, and executes nightly via cron.
 - [ ] Review MCP server console UART write/inject path for redundancy or dead code.
 - [ ] Improve MCP error reporting for syscall failures (surface errno, offending syscall, and arguments).
 - [ ] Add register delta/diff reporting to MCP halts so successive `sim_get_registers` calls highlight ABI changes automatically.
