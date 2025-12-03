@@ -42,7 +42,7 @@ Always keep going — GO GO GO!
 ### Immediate Requirements (No-Pause Guard)
 > **No-Pause Guard:** Do not stop working, summarize, or reply until every item below is either completed or a hard failure (with failing command, reproduction notes, and next experiment) is logged directly underneath it.
 > **Terminology:** Only label a situation a "blocker" when that documented hard failure prevents all forward progress; otherwise treat these as mandatory in-progress requirements.
-- [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.). *(In progress – Dec 3: performing RCA on paused workflows and planning expanded MCP coverage suite.)*
+- [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.). *(In progress – Dec 3: SessionManager/register/run_until/VT100 tests landed, docs/mcp_regression_coverage.md updated, and `python3 run_sim_tests.py --fail-under 70` keeps passing at 76%; memory tools + watchpoints up next.)*
 - [x] Create a single top-level script (`./run_sim_tests.py`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
 - [x] Integrate automated coverage reporting so every test run emits a coverage summary and fails when coverage regresses.
   - Coverage now scopes to the exercised simulator core (cpu/decoder/execute/memory/pyrv32_system/syscalls) so `python3 run_sim_tests.py --fail-under 70` completes successfully at 72%.

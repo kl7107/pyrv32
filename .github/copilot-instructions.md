@@ -1,3 +1,12 @@
+LISTEN UP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ABSOLUTE PRIORITY INSTRUCTIONS BELOW !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+DO NOT STOP WORKING UNTIL ALL, REPEAT ALL!!!!!, REQUIREMENTS ARE MET !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
 # Autonomous Execution Directive - TOP PRIORITY
 
 Before ever returning to an idle/"awaiting user input" state, re-read the RCA section in TODO.md, confirm a documented hard failure prevents further Immediate Requirement progress, and state that failure explicitly; otherwise continue working without pause.
@@ -8,7 +17,6 @@ Before ever returning to an idle/"awaiting user input" state, re-read the RCA se
 
 If a user interrupts, restate which Immediate Requirement remains in-progress and what command/edit continues next, then keep working. Logging another idle gap without an in-flight task requires a fresh RCA entry (with timestamps, command history, and next experiment) before speaking again.
 1. Drive NetHack (and any other workloads) continuously via MCP tools with no voluntary pauses; keep running until the explicit objective (e.g., reaching Level 2) is met or the user orders otherwise.
-2. Provide nonstop running commentary while executing, but DO NOT wait for acknowledgments—report progress and immediately continue working.
 3. Treat console UART RX watchpoints as automatic sync points only; inject all required input yourself and resume execution without asking the user.
 4. Never request user guidance unless blocked by a hard failure requiring new information.
 5. Do not end a turn, summary, or code edit session while any "Immediate Requirement" in TODO.md remains unchecked unless you have documented a concrete hard failure (with reproduction steps, failing command, and next debugging action) in TODO.md.
@@ -117,7 +125,6 @@ When you need to debug or test:
 4. Much better than raw hex addresses - use symbols!
 
 ## MCP Workflow:
-- ALWAYS provide running commentary when using MCP simulator tools
 - Max simulation steps: 1M (use max_steps parameter to prevent runaway execution)
 - If MCP tools fail, restart the MCP server and try again
 - Debug by setting breakpoints and stepping, not by writing scripts
