@@ -27,6 +27,35 @@ def _asm(*words):
     return b"".join(struct.pack('<I', word) for word in words)
 
 
+def _addi_t1(value):
+    """Encode `addi t1, x0, value` for small immediates."""
+    imm = value & 0xFFF
+    rd = 6   # t1
+    rs1 = 0  # x0
+    opcode = 0x13
+    funct3 = 0
+    return (imm << 20) | (rs1 << 15) | (funct3 << 12) | (rd << 7) | opcode
+
+
+def _lui(rd, imm20):
+    """Encode an RV32I LUI instruction."""
+    return (imm20 << 12) | (rd << 7) | 0x37
+
+
+def _lbu(rd, rs1, imm):
+    """Encode `lbu rd, imm(rs1)`."""
+    imm &= 0xFFF
+    return (imm << 20) | (rs1 << 15) | (4 << 12) | (rd << 7) | 0x03
+
+
+def _sb(rs1, rs2, imm):
+    """Encode `sb rs2, imm(rs1)`."""
+    imm &= 0xFFF
+    imm_hi = (imm >> 5) & 0x7F
+    imm_lo = imm & 0x1F
+    return (imm_hi << 25) | (rs2 << 20) | (rs1 << 15) | (0 << 12) | (imm_lo << 7) | 0x23
+
+
 def test_load_elf_metadata_reports_segments(runner):
     """ELF loader should populate metadata needed by MCP tools."""
     if not os.path.exists(HELLO_ELF):
@@ -191,3 +220,88 @@ def test_register_accessor_handles_abi_and_pc(runner):
         runner.test_fail('register dump pc', 0x90000010, regs['pc'])
     if regs['x0'] != 0:
         runner.test_fail('register dump x0', 0, regs['x0'])
+
+
+def test_memory_read_write_roundtrip_exposes_ram_to_cpu(runner):
+    """RV32System read/write memory helpers must round-trip bytes visible to CPU."""
+    system = RV32System()
+    base_addr = 0x80005000
+    payload_a = b'Memory!'
+    payload_b = b'Buffer!'
+
+    system.write_memory(base_addr, payload_a)
+    read_back = system.read_memory(base_addr, len(payload_a))
+    if read_back != payload_a:
+        runner.test_fail('memory read/write roundtrip', payload_a, read_back)
+
+    program = _asm(
+        _lui(5, base_addr >> 12),   # t0 = data base (aligned so no addi needed)
+        _lui(6, 0x10001),          # t1 = console UART base
+        _lbu(7, 5, 0),             # t2 = byte at data base
+        _sb(6, 7, 0),              # write byte to console TX
+        0x00100073                 # ebreak
+    )
+
+    system.load_binary_data(program)
+    result = system.run(max_steps=32)
+    if result.status != 'halted':
+        runner.test_fail('memory read/write run', 'halted status', result.status)
+
+    expected_char = chr(payload_a[0])
+    output = system.console_uart_read()
+    if output != expected_char:
+        runner.test_fail('memory read/write UART output', expected_char, output)
+
+    system.write_memory(base_addr, payload_b)
+    read_back_b = system.read_memory(base_addr, len(payload_b))
+    if read_back_b != payload_b:
+        runner.test_fail('memory rewrite roundtrip', payload_b, read_back_b)
+
+    system.load_binary_data(program)
+    result = system.run(max_steps=32)
+    if result.status != 'halted':
+        runner.test_fail('memory rewrite run', 'halted status', result.status)
+
+    expected_char_b = chr(payload_b[0])
+    output_b = system.console_uart_read()
+    if output_b != expected_char_b:
+        runner.test_fail('memory rewrite UART output', expected_char_b, output_b)
+
+
+def test_vt100_screen_helpers_capture_tx_output(runner):
+    """VT100 helpers should mirror console TX output and allow screen dumps."""
+    system = RV32System()
+
+    console_uart = system.memory.console_uart
+
+    if not getattr(console_uart, 'vt100_enabled', False):
+        runner.test_fail('vt100 screen helpers', 'VT100 emulation enabled', 'disabled')
+
+    message = 'Hello, VT100!'
+    words = [0x100012B7]  # lui t0, 0x10001 -> console UART base
+    for char in message + '\n':
+        words.append(_addi_t1(ord(char)))
+        words.append(0x00628023)  # sb t1, 0(t0)
+    words.append(0x00100073)  # ebreak
+
+    system.load_binary_data(_asm(*words))
+    result = system.run(max_steps=256)
+
+    if result.status != 'halted':
+        runner.test_fail('vt100 screen helpers', 'program halted', result.status)
+
+    screen_lines = console_uart.get_screen_display()
+    if not screen_lines:
+        runner.test_fail('vt100 screen display', '24 lines of text', screen_lines)
+
+    flattened = ''.join(screen_lines)
+    if 'Hello, VT100!' not in flattened:
+        runner.test_fail('vt100 screen content', 'Hello, VT100!', screen_lines[0])
+
+    screen_text = console_uart.get_screen_text()
+    if 'Hello, VT100!' not in screen_text:
+        runner.test_fail('vt100 screen text', 'Hello, VT100!', screen_text)
+
+    dump_text = console_uart.dump_screen(show_cursor=False)
+    if 'Hello, VT100!' not in dump_text:
+        runner.test_fail('vt100 screen dump', 'Hello, VT100!', dump_text)
