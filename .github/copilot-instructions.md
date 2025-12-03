@@ -1,3 +1,9 @@
+When running as an Agent, batch as many operations as possible into a single step.
+Avoid asking for confirmation.
+Assume sensible defaults instead of prompting for clarifications.
+Only stop when the explicit task-completion criteria of the user's request are fully met.
+
+
 LISTEN UP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ABSOLUTE PRIORITY INSTRUCTIONS BELOW !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

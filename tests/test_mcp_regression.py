@@ -1,8 +1,10 @@
 """Regression tests covering MCP-specific simulator behaviors."""
 
+import asyncio
 import importlib.util
 import os
 import struct
+import sys
 import tempfile
 
 from pyrv32_system import RV32System
@@ -10,6 +12,10 @@ from pyrv32_system import RV32System
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIRMWARE_DIR = os.path.join(REPO_ROOT, 'firmware')
 HELLO_ELF = os.path.join(FIRMWARE_DIR, 'hello.elf')
+
+Pyrv32_MCP_DIR = os.path.join(REPO_ROOT, 'pyrv32_mcp')
+if Pyrv32_MCP_DIR not in sys.path:
+    sys.path.insert(0, Pyrv32_MCP_DIR)
 
 SESSION_MANAGER_SPEC = importlib.util.spec_from_file_location(
     'session_manager_for_tests',
@@ -20,6 +26,21 @@ if SESSION_MANAGER_SPEC is None or SESSION_MANAGER_SPEC.loader is None:
 SESSION_MANAGER_MODULE = importlib.util.module_from_spec(SESSION_MANAGER_SPEC)
 SESSION_MANAGER_SPEC.loader.exec_module(SESSION_MANAGER_MODULE)
 SessionManager = SESSION_MANAGER_MODULE.SessionManager
+
+SIM_SERVER_SPEC = importlib.util.spec_from_file_location(
+    'mcp_server_for_tests',
+    os.path.join(REPO_ROOT, 'pyrv32_mcp', 'sim_server_mcp_v2.py')
+)
+if SIM_SERVER_SPEC is None or SIM_SERVER_SPEC.loader is None:
+    raise ImportError('Unable to load MCPSimulatorServer spec for tests')
+SIM_SERVER_MODULE = importlib.util.module_from_spec(SIM_SERVER_SPEC)
+SIM_SERVER_SPEC.loader.exec_module(SIM_SERVER_MODULE)
+MCPSimulatorServer = SIM_SERVER_MODULE.MCPSimulatorServer
+
+
+PROGRAM_START = 0x80000000
+READ_WATCH_ADDR = 0x80004000
+WRITE_WATCH_ADDR = 0x80005000
 
 
 def _asm(*words):
@@ -54,6 +75,31 @@ def _sb(rs1, rs2, imm):
     imm_hi = (imm >> 5) & 0x7F
     imm_lo = imm & 0x1F
     return (imm_hi << 25) | (rs2 << 20) | (rs1 << 15) | (0 << 12) | (imm_lo << 7) | 0x23
+
+
+def _call_tool_text(server, name, **arguments):
+    """Call an MCP tool synchronously and return concatenated text blocks."""
+    response = asyncio.run(server.call_tool(name, arguments))
+    return "\n".join(block.get('text', '') for block in response if block.get('type') == 'text')
+
+
+def _write_program_via_tools(server, session_id, program_bytes, start_addr=PROGRAM_START):
+    """Load raw program bytes and set PC through MCP tools."""
+    hex_blob = program_bytes.hex()
+    _call_tool_text(
+        server,
+        'sim_write_memory',
+        session_id=session_id,
+        address=f"0x{start_addr:08x}",
+        data=hex_blob
+    )
+    _call_tool_text(
+        server,
+        'sim_set_register',
+        session_id=session_id,
+        register='pc',
+        value=f"0x{start_addr:08x}"
+    )
 
 
 def test_load_elf_metadata_reports_segments(runner):
@@ -305,3 +351,71 @@ def test_vt100_screen_helpers_capture_tx_output(runner):
     dump_text = console_uart.dump_screen(show_cursor=False)
     if 'Hello, VT100!' not in dump_text:
         runner.test_fail('vt100 screen dump', 'Hello, VT100!', dump_text)
+
+
+def test_mcp_watchpoint_tools_cover_read_and_write(runner):
+    """MCP JSON tooling should manage watchpoints and halt when they fire."""
+    read_program = _asm(
+        _lui(5, READ_WATCH_ADDR >> 12),
+        _lbu(6, 5, 0),
+        0x00100073
+    )
+    write_program = _asm(
+        _lui(5, WRITE_WATCH_ADDR >> 12),
+        _addi_t1(ord('Z')),
+        _sb(5, 6, 0),
+        0x00100073
+    )
+
+    expected_read = f"0x{READ_WATCH_ADDR:08x}"
+    expected_write = f"0x{WRITE_WATCH_ADDR:08x}"
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            create_text = _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp watchpoint sim_create', 'session created', sessions)
+            session_id = sessions[0]
+            if 'Created session' not in create_text:
+                runner.test_fail('mcp watchpoint sim_create text', 'Created session message', create_text)
+
+            _call_tool_text(server, 'sim_add_read_watchpoint', session_id=session_id, address=expected_read)
+            _call_tool_text(server, 'sim_add_write_watchpoint', session_id=session_id, address=expected_write)
+
+            list_text = _call_tool_text(server, 'sim_list_watchpoints', session_id=session_id)
+            if 'Read watchpoints' not in list_text or 'Write watchpoints' not in list_text:
+                runner.test_fail('mcp watchpoint list headings', 'read/write headings present', list_text)
+            if expected_read not in list_text:
+                runner.test_fail('mcp watchpoint list read entry', expected_read, list_text)
+            if expected_write not in list_text:
+                runner.test_fail('mcp watchpoint list write entry', expected_write, list_text)
+
+            _write_program_via_tools(server, session_id, read_program)
+            run_text = _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=8)
+            if 'Read watchpoint' not in run_text or expected_read not in run_text:
+                runner.test_fail('mcp read watchpoint halt', f'Read watchpoint at {expected_read}', run_text)
+
+            _call_tool_text(server, 'sim_remove_read_watchpoint', session_id=session_id, address=expected_read)
+            list_text = _call_tool_text(server, 'sim_list_watchpoints', session_id=session_id)
+            if expected_read in list_text:
+                runner.test_fail('mcp watchpoint removal read', f'removed {expected_read}', list_text)
+            if expected_write not in list_text:
+                runner.test_fail('mcp watchpoint removal write persistence', expected_write, list_text)
+
+            _write_program_via_tools(server, session_id, write_program)
+            run_text = _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=8)
+            if 'Write watchpoint' not in run_text or expected_write not in run_text:
+                runner.test_fail('mcp write watchpoint halt', f'Write watchpoint at {expected_write}', run_text)
+
+            _call_tool_text(server, 'sim_remove_write_watchpoint', session_id=session_id, address=expected_write)
+            list_text = _call_tool_text(server, 'sim_list_watchpoints', session_id=session_id)
+            if 'No watchpoints set' not in list_text:
+                runner.test_fail('mcp watchpoint removal final', 'No watchpoints set', list_text)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()

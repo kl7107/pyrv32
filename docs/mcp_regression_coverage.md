@@ -19,7 +19,7 @@ This document captures the current state of automated regression coverage for MC
 | Input injection | `sim_console_uart_write` aliasing + LF handling | **Partial** | Low-level API tested indirectly; verifying the consolidated MCP path requires an end-to-end test.
 | Register access | `sim_get_registers`, `sim_get_register`, `sim_set_register` | **Covered** | `test_register_accessor_handles_abi_and_pc` now verifies ABI aliases, zero-reg immutability, and PC reporting through the MCP interface.
 | Memory access | `sim_read_memory`, `sim_write_memory`, `sim_fill_memory`? (if any) | **Covered** | `test_memory_read_write_roundtrip_exposes_ram_to_cpu` proves memory writes made through RV32System persist in RAM and drive program-visible UART output; only the JSON tooling glue remains untested.
-| Breakpoints & watchpoints | `sim_add_breakpoint`, `sim_remove_breakpoint`, `sim_list_breakpoints`, `sim_add_read_watchpoint`, `sim_add_write_watchpoint`, watchpoint hit flow | **Partial/Missing** | RV32System breakpoint APIs tested; memory watchpoints + MCP tool actions lack automated coverage.
+| Breakpoints & watchpoints | `sim_add_breakpoint`, `sim_remove_breakpoint`, `sim_list_breakpoints`, `sim_add_read_watchpoint`, `sim_add_write_watchpoint`, watchpoint hit flow | **Partial** | `tests/test_mcp_regression.py::test_mcp_watchpoint_tools_cover_read_and_write` now exercises MCP read/write watchpoint tools end-to-end; breakpoint JSON glue still untested.
 | Disassembly + symbols | `sim_disassemble`, `sim_lookup_symbol`, `sim_reverse_lookup`, `sim_get_symbol_info`, objdump cache | **Missing** | No regression tests assert symbol lookup accuracy or cached disassembly output.
 | ELF/trace metadata | `sim_get_trace`, trace buffer sizing (if exposed) | **Missing** | Not currently validated.
 | Syscall surfacing | Error propagation (errno, syscall tracing) | **Missing** | Existing C tests cover functionality but not MCP error reporting helpers.
@@ -34,7 +34,8 @@ This document captures the current state of automated regression coverage for MC
 - ✅ SessionManager lifecycle coverage landed via `test_session_manager_lifecycle_and_lock_cleanup`.
 - ✅ Register accessor regression tests landed via `test_register_accessor_handles_abi_and_pc`.
 - ✅ VT100 screen helper smoke coverage landed via `test_vt100_screen_helpers_capture_tx_output` (MCP tool path still pending).
-- ✅ Memory tool coverage landed via `test_memory_read_write_roundtrip_exposes_ram_to_cpu`; watchpoint/breakpoint MCP wiring is up next.
+- ✅ Memory tool coverage landed via `test_memory_read_write_roundtrip_exposes_ram_to_cpu`; breakpoint MCP wiring remains after the new watchpoint tool coverage.
+- ✅ Watchpoint MCP tool coverage landed via `test_mcp_watchpoint_tools_cover_read_and_write`, proving the JSON glue adds/lists/removes watchpoints and halts when read/write accesses occur.
 
 ### Detailed Test Plan
 | Test Name (planned) | Coverage Goal |
@@ -46,7 +47,7 @@ This document captures the current state of automated regression coverage for MC
 | `test_mcp_vt100_screen_dump` | ✅ Implemented as `test_vt100_screen_helpers_capture_tx_output`; validates pyte-backed screen/dump output (MCP tool wrapper still pending). |
 | `test_mcp_register_access` | ✅ Implemented as `test_register_accessor_handles_abi_and_pc`; exercises ABI names, `pc`, and zero register protection. |
 | `test_mcp_memory_access` | ✅ Implemented as `test_memory_read_write_roundtrip_exposes_ram_to_cpu`; writes payload via `write_memory`, confirms `read_memory`, and verifies CPU-visible UART output driven by the stored bytes. |
-| `test_mcp_breakpoints_watchpoints` | Add/remove/list breakpoints and read/write watchpoints, then run until each triggers. |
+| `test_mcp_breakpoints_watchpoints` | Watchpoint portion implemented as `test_mcp_watchpoint_tools_cover_read_and_write`; add breakpoint tool coverage and make both hit conditions observable. |
 | `test_mcp_symbol_and_disasm` | Load NetHack symbols, assert `sim_lookup_symbol`/`sim_reverse_lookup`/`sim_get_symbol_info`, and verify cached disassembly text matches objdump output. |
 | `test_mcp_trace_buffer` | Enable trace buffer, execute a few instructions, and confirm `sim_get_trace` formatting. |
 | `test_mcp_syscall_error_reporting` | Run a firmware binary that intentionally fails a syscall and ensure MCP response surfaces errno/message (to be implemented alongside improved reporting). |
