@@ -353,6 +353,92 @@ def test_vt100_screen_helpers_capture_tx_output(runner):
         runner.test_fail('vt100 screen dump', 'Hello, VT100!', dump_text)
 
 
+def test_mcp_breakpoint_tools_cover_add_list_remove(runner):
+    """MCP JSON tooling should manage PC breakpoints and halt when they fire."""
+    breakpoint_program = _asm(
+        _addi_t1(1),
+        _addi_t1(2),
+        0x00100073
+    )
+
+    first_pc = PROGRAM_START
+    second_pc = PROGRAM_START + 4
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp breakpoint sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            _write_program_via_tools(server, session_id, breakpoint_program)
+            first_addr = f"0x{first_pc:08x}"
+            second_addr = f"0x{second_pc:08x}"
+
+            _call_tool_text(
+                server,
+                'sim_add_breakpoint',
+                session_id=session_id,
+                address=first_addr
+            )
+
+            list_text = _call_tool_text(server, 'sim_list_breakpoints', session_id=session_id)
+            if first_addr not in list_text:
+                runner.test_fail('mcp breakpoint list first', first_addr, list_text)
+
+            run_text = _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=8)
+            if 'Status: breakpoint' not in run_text or f"PC: {first_addr}" not in run_text:
+                runner.test_fail('mcp breakpoint run first', f'break at {first_addr}', run_text)
+
+            remove_text = _call_tool_text(
+                server,
+                'sim_remove_breakpoint',
+                session_id=session_id,
+                address=first_addr
+            )
+            if 'Removed breakpoint' not in remove_text:
+                runner.test_fail('mcp breakpoint remove first', 'Removed breakpoint message', remove_text)
+
+            list_text = _call_tool_text(server, 'sim_list_breakpoints', session_id=session_id)
+            if 'No breakpoints' not in list_text:
+                runner.test_fail('mcp breakpoint list empty', 'No breakpoints', list_text)
+
+            _write_program_via_tools(server, session_id, breakpoint_program)
+            _call_tool_text(
+                server,
+                'sim_add_breakpoint',
+                session_id=session_id,
+                address=second_addr
+            )
+
+            list_text = _call_tool_text(server, 'sim_list_breakpoints', session_id=session_id)
+            if second_addr not in list_text:
+                runner.test_fail('mcp breakpoint list second', second_addr, list_text)
+
+            run_text = _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=8)
+            if 'Status: breakpoint' not in run_text or f"PC: {second_addr}" not in run_text:
+                runner.test_fail('mcp breakpoint run second', f'break at {second_addr}', run_text)
+
+            _call_tool_text(
+                server,
+                'sim_remove_breakpoint',
+                session_id=session_id,
+                address=second_addr
+            )
+
+            list_text = _call_tool_text(server, 'sim_list_breakpoints', session_id=session_id)
+            if 'No breakpoints' not in list_text:
+                runner.test_fail('mcp breakpoint remove second', 'No breakpoints', list_text)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
 def test_mcp_watchpoint_tools_cover_read_and_write(runner):
     """MCP JSON tooling should manage watchpoints and halt when they fire."""
     read_program = _asm(
