@@ -3,9 +3,12 @@
 Automated debugging: Find where s4 becomes 0x80000000
 """
 
+import re
 import subprocess
 import time
 import sys
+
+S4_MATCH = re.compile(r's4\(x20\)\s*:\s*0x([0-9a-fA-F]+)')
 
 def main():
     print("=" * 70)
@@ -67,12 +70,13 @@ def main():
         if 'Breakpoint' in line and 'hit' in line:
             print(f"\n✓ {line.strip()}")
             breakpoint_found = True
-        elif breakpoint_found and 'PC=' in line and 's4=0x80000000' in line:
-            # Extract PC
-            if 'PC=0x' in line:
-                pc_start = line.index('PC=0x') + 5
-                bp_pc = line[pc_start:pc_start+8]
-            print(line.strip())
+        elif breakpoint_found and 'PC=' in line:
+            match = S4_MATCH.search(line)
+            if match and int(match.group(1), 16) == 0x80000000:
+                if 'PC=0x' in line:
+                    pc_start = line.index('PC=0x') + 5
+                    bp_pc = line[pc_start:pc_start+8]
+                print(line.strip())
         elif breakpoint_found and '0x' in line and ':' in line and '(' in line:
             # This is the instruction line
             print(line.strip())

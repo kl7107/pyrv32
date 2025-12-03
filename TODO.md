@@ -203,6 +203,10 @@ Always keep going — GO GO GO!
 ### Debugger Register Dump Polish
 - Refactored the CLI/debugger register dump to emit a 4×8 column-major table with aligned `abi(xN)` labels and placed the PC in the final slot for quick visual scans.
 - Updated `check_s4_at_reset.py` to parse the new `s4(x20)` display so reset-time checks keep working without manual tweaks.
+- Updated `auto_debug_s4.py`, `run_tsrneq_s4.py`, and `check_first_trace.py` to parse the new `s4(x20)` register text, eliminating the last vestiges of the legacy `s4=0x...` format.
+
+### MCP NetHack Smoke Test (Dec 3, 2025)
+- Started a fresh MCP session, loaded `nethack-3.4.3/src/nethack.elf` via `sim_load_elf`, and drove the game through the initial prompts using `sim_run_until_console_status_read` plus UART read/write calls to confirm the refactored register/output workflow doesn’t break NetHack startup.
 
 ### NetHack Makefile Consolidation
 - Introduced `sys/pyrv32/toolchain.mk` so all PyRV32 builds share toolchain paths, runtime object lists, and default CFLAGS/LDFLAGS instead of duplicating them across `Makefile.src` and `Makefile.utl`.

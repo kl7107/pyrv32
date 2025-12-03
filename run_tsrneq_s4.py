@@ -3,8 +3,11 @@
 Automated script to find when s4 was NOT 0x80000000
 """
 
+import re
 import subprocess
 import time
+
+S4_PATTERN = re.compile(r's4\(x20\)\s*:\s*0x([0-9a-fA-F]+)')
 
 def main():
     print("=" * 70)
@@ -81,13 +84,12 @@ def main():
         if 'Found s4!=' in line and '0x80000000' in line:
             print(f"\n✓ {line.strip()}")
             # Extract the actual s4 value
-            if 's4=0x' in line:
-                parts = line.split('s4=0x')
-                if len(parts) > 1:
-                    value = parts[1].split()[0]
-                    print(f"\n  The CORRECT s4 value should be: 0x{value}")
-                    print(f"  But it was corrupted to: 0x80000000 (_start)")
-                    print(f"\n  This is the function pointer vfprintf should call!")
+            match = S4_PATTERN.search(line)
+            if match:
+                value = match.group(1)
+                print(f"\n  The CORRECT s4 value should be: 0x{value}")
+                print(f"  But it was corrupted to: 0x80000000 (_start)")
+                print(f"\n  This is the function pointer vfprintf should call!")
             break
     else:
         print("\nSearching through output...")

@@ -3,8 +3,11 @@
 Look at the VERY FIRST trace entries to see s4's initial value
 """
 
+import re
 import subprocess
 import sys
+
+S4_PATTERN = re.compile(r's4\(x20\)\s*:\s*0x([0-9a-fA-F]+)')
 
 def main():
     print("Looking at first trace entries to see when s4 became 0x80000000...")
@@ -57,14 +60,16 @@ def main():
     # Check if s4=0x80000000 in first entry
     found_s4 = False
     for line in output:
-        if 's4=' in line or 'x20' in line:
+        match = S4_PATTERN.search(line)
+        if match:
             found_s4 = True
-            if '0x80000000' in line:
+            value = int(match.group(1), 16)
+            if value == 0x80000000:
                 print("\n" + "=" * 70)
                 print("FOUND IT! s4=0x80000000 at trace entry 0!")
                 print("This means s4 is set to _start on THE VERY FIRST INSTRUCTION!")
                 print("=" * 70)
-            elif 's4=0x00000000' in line:
+            elif value == 0:
                 print("\n" + "=" * 70)
                 print("s4=0 at trace entry 0 (correct initialization)")
                 print("Need to find when it changes to 0x80000000")
