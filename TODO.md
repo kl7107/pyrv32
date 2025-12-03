@@ -35,150 +35,89 @@ Always keep going — GO GO GO!
 
 ---
 
-## 🎯 Sprint: Play NetHack to Level 2
+## ⚙️ Simulator / MCP / Debugger Improvements (Do These First)
 
-**Goal:** Play NetHack from start through Level 1 to descending stairs to Level 2
+### Immediate Blockers
+- [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.).
+- [ ] Create a single top-level script (e.g., `./run_sim_tests.sh`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
+- [ ] Integrate automated coverage reporting (coverage.py or similar) so every test run emits a coverage summary and fails when coverage regresses.
+- [ ] Document the unified test+coverage workflow so every assistant can run it autonomously (no user prompts required).
+- [ ] Schedule the unified runner (cron/CI) to execute continuously and publish results, guaranteeing progress even when the user is away.
+- [ ] Review MCP server console UART write/inject path for redundancy or dead code.
+- [ ] Improve MCP error reporting for syscall failures (surface errno, offending syscall, and arguments).
+- [ ] Add register delta/diff reporting to MCP halts so successive `sim_get_registers` calls highlight ABI changes automatically.
+- [ ] Add missing syscalls as they are discovered during NetHack play.
+- [ ] Optimize stdio buffering paths if profiling shows excessive churn.
 
-- [x] **Implement pyte VT100 terminal emulation** - 80x24 virtual screen in simulator ✅ COMPLETE
-- [x] **Add screen dump commands** - CLI/MCP commands to view terminal state ✅ COMPLETE
-- [x] **Add logging** - /tmp logs for console TX/RX and screen dumps ✅ COMPLETE
-- [x] **Fix stdin/stdout syscall redirection** - Route fd 0/1/2 to console UART ✅ COMPLETE
-- [x] **Add auto screen dumps on RX poll** - Rate-limited dumps when waiting for input ✅ COMPLETE
-- [x] **CRITICAL FIX: stdin_read() blocking behavior** - Fixed Dec 1, 2025 ✅ COMPLETE
-  * ROOT CAUSE: stdin_read() was blocking waiting for ALL requested bytes (e.g., 512)
-  * When only partial input available (e.g., "Hero\n" = 5 bytes), would hang forever
-  * SOLUTION: Read first byte blocking, remaining bytes non-blocking, return actual count
-  * Matches Unix read() semantics - partial reads are normal and expected
-  * NetHack now proceeds correctly after name input (tested with 4 additional steps)
-- [x] **CRITICAL FIX: run_until_output() wrong UART** - Fixed Dec 1, 2025 ✅ COMPLETE
-  * Was checking debug UART (self.memory.uart) instead of console UART
-  * NetHack writes to console UART, so run_until_output() never detected output
-  * Changed to check self.memory.console_uart.get_output_text()
-- [x] **CRITICAL FIX: get_status() console_has_output** - Fixed Dec 1, 2025 ✅ COMPLETE
-  * Was referencing non-existent self.console_uart
-  * Changed to check self.memory.console_uart.get_output_text()
-- [x] **NEW FUNCTION: run_until_console_status_read()** - Added Dec 1, 2025 ✅ COMPLETE
-  * Runs until read instruction accesses 0x10001008 (Console UART RX Status)
-  * Detects when program polls for input (NetHack polling pattern)
-  * Automatically adds/removes read watchpoint as needed
-  * MCP tool: sim_run_until_console_status_read
-- [ ] **Complete NetHack character creation** - Automate full character creation sequence
-  * Use sim_run_until_console_status_read to detect input prompts
-  * Inject name, role, race, gender, alignment inputs
-  * Verify character creation completes successfully
-  * Regenerated `include/onames.h` with PYRV32 config and rebuilt NetHack to fix init_objects prob mismatch
-  * Fixed TLS thread-pointer setup in `firmware/crt0.S` so libc TLS buffers (errno/localtime) stop trampling env data
-  * Added ELF loading support to `pyrv32.py` CLI so PTY runs can execute NetHack ELF directly (Dec 2, 2025)
-- [ ] **Play through to Level 2** - Character creation → explore Level 1 → descend stairs
+### Performance & Instrumentation
+- [ ] Performance profiling infrastructure (cycle counts, hotspots, trace export).
+- [ ] Memory access optimization (faster load/store paths, batching).
+- [ ] Instruction cache/decode optimization.
+- [ ] Function call tracing to visualize NetHack's control flow.
+- [ ] Memory watchpoints with matching/conditional filters.
+- [ ] Save/restore full simulator state for quick repros.
+- [ ] Performance counters and profiling tools exposed via MCP.
+
+### MCP Server & Tooling
+- [ ] Breakpoint condition support (hit counts, expression filters).
+- [ ] Performance metrics API (per-run instruction counts, UART stats).
+- [ ] GDB remote protocol support for external debuggers.
 
 ---
 
-## 🔥 High Priority
+## 🚀 Active Sprint: Reach NetHack Level 2
 
-- [x] Verify shared ELF loader via CLI and MCP ✅ Dec 2, 2025
-  * Confirmed NetHack loads identically via `pyrv32.py --step` (auto-quit) and via MCP `sim_load_elf` followed by `sim_run_until_console_status_read`.
-- [x] Surface ELF metadata through MCP ✅ Dec 2, 2025
-  * Added `sim_get_load_info` MCP tool plus symbol-count reporting in `sim_load_elf`, backed by cached metadata in `RV32System`.
-- [x] Debug NetHack save/restore failure ✅ Dec 2, 2025
-  * MCP automation reproduced the "Saving... Cannot open save file" error; root cause was missing `usr/games/lib/nethackdir/save/` directory in `pyrv32_sim_fs`.
-  * Added the directory and verified that saving now creates `save/0Saver_` and launching a new session restores the save (console shows "Restoring save file...").
-- [x] Add `argv`/`envp` support to MCP tools (CLI has it, MCP doesn't)
-  * `sim_load_elf` now accepts optional `argv`/`envp` arrays and `RV32System.load_elf()` wires them into memory/registers just like the CLI path.
-  * Metadata surfaced via `sim_load_elf`/`sim_get_load_info` includes argc/argv/envp, and `firmware/test_argvenvp.elf` passes under MCP with injected arguments/env values.
-- [ ] Update main README with NetHack build/play instructions
-- [ ] Document syscall implementation status matrix
-- [ ] Review MCP server console UART write/inject path for redundancy
-- [x] Fix NetHack perm locking (identify stuck lock file, implement proper file locking semantics so character creation can proceed)
+**Objective:** Drive NetHack from fresh launch through Level 1 and descend the stairs using the MCP workflow only.
 
----
+> **Autonomy Marker:** Expect to progress through the entire "Simulator / MCP / Debugger Improvements" section, plus the character creation + Level 1 macro work, before needing to pause for new guidance. Only stop early if blockers arise that violate the MCP debugging rules above.
 
-## ⚠️ Medium Priority
-
-- [x] Cache objdump -d -S output for MCP
-  * Added `objdump_cache.py` helper that materializes full `objdump -d -S` output keyed by ELF path, size, and mtime, then slices the cached text so repeated lookups avoid re-running objdump.
-  * Integrated `DisasmCache` into `RV32System` and exposed `disassemble_cached()` so both CLI and MCP layers can reuse the same logic.
-  * Cache snapshots now build immediately when an ELF is loaded and stay fixed until another `sim_load_elf`, so MCP lookups never trigger objdump reruns mid-session even if the file changes on disk.
-  * Added `sim_disasm_cached` MCP tool for fast range lookups using the cached disassembly output, returning the matching lines directly to clients.
-- [ ] Clean up temporary debug scripts (analyze_*.py, debug_*.py, etc.)
-- [ ] Add regression tests for freopen() and stdio buffering
-- [ ] Improve MCP error reporting for syscall failures
-- [ ] Review all NetHack patches in `sys/pyrv32/`
+- [ ] **Stabilize MCP/debugger tooling (blocking)** – Complete every item in the "Simulator / MCP / Debugger Improvements" section above before pushing gameplay automation.
+- [ ] **Complete NetHack character creation** – Automate the entire prompt sequence.
+  * Always gate execution with `sim_run_until_console_status_read` so each prompt is observed before injecting input.
+  * Feed deterministic name/role/race/gender/alignment choices via `sim_console_uart_write` and confirm the welcome banner appears every run.
+  * Keep the NetHack sources pristine; if something breaks, fix the simulator/syscalls.
+- [ ] **Play through to Level 2** – Explore Level 1 safely and descend the staircase.
+  * Capture and replay the keystroke stream so failures can be reproduced.
+  * Save on arrival at Level 2 so regressions can be bisected quickly.
+- [ ] **Capture a deterministic Level 1 walkthrough macro** – New task.
+  * First verify the current NetHack build + simulator feed identical RNG/layout across runs (same hero name, same command pacing). If layout diverges, fall back to a screen-aware driver instead of a blind macro.
+  * Record the keystrokes (name + Level 1 exploration) that consistently reach the stairs, storing them in a plain-text macro file the MCP runner can read.
+  * Annotate each input with the expected prompt/screen fragment so drift is easy to detect with `sim_get_screen` diffs.
+  * Treat the macro as the acceptance artifact for the sprint; keep iterating until it survives multiple end-to-end runs.
 
 ---
 
-## 💡 Future Ideas
+## 📌 Near-Term Backlog
 
-- [ ] Color support (TEXTCOLOR)
-- [ ] GDB remote protocol support
-- [ ] Network syscalls for multiplayer
-- [ ] Performance counters and profiling tools
-- [ ] Signal handling (SIGINT, SIGTERM)
+### Gameplay & NetHack Flow
+- [ ] Clean up temporary debug scripts (`analyze_*.py`, `debug_*.py`, etc.) so only the MCP-first workflow remains documented.
+- [ ] Review all NetHack patches in `sys/pyrv32/` to ensure no accidental gameplay hacks remain.
 
----
-
-## 📦 By Component
-
-### NetHack Integration
-- [x] Build all utilities (makedefs, lev_comp, dgn_comp)
-- [x] Generate all 126 runtime files
-- [x] Compile NetHack binary (1.7MB)
-- [ ] Color support (TEXTCOLOR patch)
-- [ ] Window size detection (CO/LI)
-- [ ] Wizard mode support
-
-### Core Simulator
-- [x] RV32IM instruction set
-- [x] Memory-mapped UART devices
-- [x] Basic syscall interface
-- [ ] Performance profiling infrastructure
-- [ ] Memory access optimization
-- [ ] Instruction cache/decode optimization
-- [ ] Function call tracing
-- [ ] Memory watchpoints with conditions
-- [ ] Save/restore simulator state
-
-### MCP Server
-- [x] Session management
-- [x] Binary loading
-- [x] Step/run execution
-- [x] Register/memory inspection
-- [x] Breakpoint support
-- [ ] argv/envp parameter support
-- [ ] Breakpoint condition support
-- [ ] Better error reporting
-- [ ] Performance metrics API
-
-### Firmware / Syscalls
-- [x] File I/O (open, read, write, close, lseek)
-- [x] Standard I/O with buffering (stdio-bufio.h)
-- [x] freopen() support
-- [x] Terminal control (tcgetattr, tcsetattr, ioctl)
-- [x] argc/argv/envp handling (CLI only, not MCP)
-- [ ] Add missing syscalls as discovered
-- [ ] Optimize stdio buffering if needed
-- [ ] Signal handling (kill, signal, sigaction)
-- [ ] Network syscalls (socket, etc.)
-- [ ] IPC syscalls (pipe, mmap, etc.)
-- [ ] Advanced file ops (fcntl, select, poll)
-
-### Testing & Quality
-- [x] test_argvenvp.c (argc/argv/envp validation)
-- [x] test_stdio_streams.c (FILE operations)
-- [ ] Regression test for freopen()
-- [ ] Test all makedefs modes
-- [ ] Automated NetHack build pipeline test
-- [ ] Edge case testing (long filenames, etc.)
-- [ ] Performance regression tests
-- [ ] Fuzzing infrastructure
-
-### Documentation
-- [x] NETHACK_READY.md (build status)
-- [x] NETHACK_UTIL_FILES.md (runtime files)
-- [x] copilot-instructions.md (AI guidelines)
-- [ ] Troubleshooting guide
-- [ ] Two-step dungeon generation docs
+### Documentation & Testing
+- [ ] Update the main `README.md` with current NetHack build + MCP play instructions.
+- [ ] Document a syscall implementation status matrix so missing calls are obvious.
+- [ ] Add regression tests for `freopen()` and stdio buffering.
+- [ ] Test all `makedefs` modes under the shared toolchain.
+- [ ] Add an automated NetHack build pipeline test (clean build + smoke run).
+- [ ] Expand edge-case testing (long filenames, deep directory trees, etc.).
+- [ ] Establish performance regression tests for simulator hot paths.
+- [ ] Add fuzzing infrastructure for syscall inputs and UART traffic.
+- [ ] Write a troubleshooting guide for common MCP/NetHack pitfalls.
+- [ ] Document the two-step dungeon generation workflow end-to-end.
 
 ---
+
+## 🧱 Core Engineering Backlog
+
+### NetHack Enhancements
+- [ ] Window size detection (CO/LI handshake) so NetHack honors the 80×24 console.
+- [ ] Wizard mode support with the correct `config.h` knobs.
+
+### Runtime & Syscall Completeness (Lowest Priority)
+- [ ] Signal handling (`kill`, `signal`, `sigaction`).
+- [ ] Network syscalls (`socket`, `bind`, `connect`, etc.) to unlock future multiplayer experiments.
+- [ ] IPC syscalls (`pipe`, `mmap`, etc.).
+- [ ] Advanced file ops (`fcntl`, `select`, `poll`).
 
 ## ✅ Recently Completed (Dec 2, 2025)
 
@@ -382,10 +321,10 @@ Always keep going — GO GO GO!
 - ✅ All NetHack data file generation
 
 ### Known Status
-- ⏸️ **NetHack awaits interactive input** - Game initializes correctly but needs terminal I/O
-- ✅ No crashes or errors during initialization
-- ✅ All data files load successfully
-- ⚠️ Interactive mode not yet tested
+- ⏸️ **Level 1 automation still pending** – Manual MCP-driven runs reach the first prompts, but a repeatable Level 1 exploration script is still outstanding.
+- ✅ No crashes or errors during initialization and basic prompt handling.
+- ✅ All data files load successfully from the regenerated runtime set.
+- ⚠️ Extended interactive gameplay (stair descent + combat loop) still unverified.
 
 ----
 
