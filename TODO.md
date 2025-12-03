@@ -37,8 +37,9 @@ Always keep going — GO GO GO!
 
 ## ⚙️ Simulator / MCP / Debugger Improvements (Do These First)
 
-### Immediate Blockers
-> **No-Pause Guard:** Do not stop working, summarize, or reply until every item below is either completed or a hard blocker (with failing command, reproduction notes, and next experiment) is logged directly underneath it.
+### Immediate Requirements (No-Pause Guard)
+> **No-Pause Guard:** Do not stop working, summarize, or reply until every item below is either completed or a hard failure (with failing command, reproduction notes, and next experiment) is logged directly underneath it.
+> **Terminology:** Only label a situation a "blocker" when that documented hard failure prevents all forward progress; otherwise treat these as mandatory in-progress requirements.
 - [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.).
 - [x] Create a single top-level script (`./run_sim_tests.py`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
 - [x] Integrate automated coverage reporting so every test run emits a coverage summary and fails when coverage regresses.
@@ -72,9 +73,9 @@ Always keep going — GO GO GO!
 
 **Objective:** Drive NetHack from fresh launch through Level 1 and descend the stairs using the MCP workflow only.
 
-> **Autonomy Marker:** Expect to progress through the entire "Simulator / MCP / Debugger Improvements" section, plus the character creation + Level 1 macro work, before needing to pause for new guidance. Only stop early if blockers arise that violate the MCP debugging rules above.
+> **Autonomy Marker:** Expect to progress through the entire "Simulator / MCP / Debugger Improvements" section, plus the character creation + Level 1 macro work, before needing to pause for new guidance. Only stop early if a hard failure arises that violates the MCP debugging rules above.
 
-> **Stop Condition:** Before any final response, either (a) cite the documented hard blocker entry (with reproduction + next action) or (b) state the exact Immediate Blocker task that is currently in-progress.
+> **Stop Condition:** Before any final response, either (a) cite the documented hard failure entry (with reproduction + next action) or (b) state the exact Immediate Requirement that is currently in-progress.
 
 - [ ] **Stabilize MCP/debugger tooling (blocking)** – Complete every item in the "Simulator / MCP / Debugger Improvements" section above before pushing gameplay automation.
 - [ ] **Complete NetHack character creation** – Automate the entire prompt sequence.
