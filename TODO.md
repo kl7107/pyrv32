@@ -202,7 +202,7 @@ Always keep going — GO GO GO!
 
 ### Debugger Register Dump Polish
 - Refactored the CLI/debugger register dump to emit a 4×8 column-major table with aligned `abi(xN)` labels and placed the PC in the final slot for quick visual scans.
-- Updated `check_s4_at_reset.py` to parse the new `s4(x20)` display (while remaining backward compatible with legacy `s4=0x...` logs) so reset-time checks keep working without manual tweaks.
+- Updated `check_s4_at_reset.py` to parse the new `s4(x20)` display so reset-time checks keep working without manual tweaks.
 
 ### NetHack Makefile Consolidation
 - Introduced `sys/pyrv32/toolchain.mk` so all PyRV32 builds share toolchain paths, runtime object lists, and default CFLAGS/LDFLAGS instead of duplicating them across `Makefile.src` and `Makefile.utl`.

@@ -79,11 +79,10 @@ def main():
     print("ANALYSIS:")
     print("=" * 70)
     
-    legacy_pattern = re.compile(r's4=0x([0-9a-fA-F]+)')
     table_pattern = re.compile(r's4\(x20\)\s*:\s*0x([0-9a-fA-F]+)')
     found_s4 = False
     for line in reg_output:
-        match = legacy_pattern.search(line) or table_pattern.search(line)
+        match = table_pattern.search(line)
         if match:
             value = int(match.group(1), 16)
             print(f"\nFound s4 line: {line.rstrip()}")
