@@ -346,7 +346,7 @@ class MCPSimulatorServer:
             },
             {
                 "name": "sim_inject_input",
-                "description": "Inject input into console UART RX buffer (simulate keyboard).",
+                "description": "Legacy alias of sim_console_uart_write (simulate keyboard input).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -698,16 +698,11 @@ class MCPSimulatorServer:
                 data = session.console_uart_read()
                 return [{"type": "text", "text": data}]
             
-            elif name == "sim_console_uart_write":
+            elif name in ("sim_console_uart_write", "sim_inject_input"):
                 data = arguments["data"]
-                print(f"[DEBUG] console_uart_write received: {data!r} (len={len(data)})", flush=True)
-                print(f"[DEBUG] Bytes: {' '.join(f'{ord(c):02x}' for c in data)}", flush=True)
-                # Convert LF to CR for VT100 terminal compatibility
-                data = data.replace('\n', '\r')
-                print(f"[DEBUG] After LF->CR conversion: {data!r} (len={len(data)})", flush=True)
-                print(f"[DEBUG] Converted bytes: {' '.join(f'{ord(c):02x}' for c in data)}", flush=True)
                 session.console_uart_write(data)
-                return [{"type": "text", "text": f"Data written to console UART RX: {data!r}"}]
+                verb = "written" if name == "sim_console_uart_write" else "injected via legacy alias"
+                return [{"type": "text", "text": f"Data {verb} to console UART RX ({len(data)} chars)"}]
             
             elif name == "sim_console_uart_has_data":
                 has_data = session.console_uart_has_data()
@@ -727,10 +722,6 @@ class MCPSimulatorServer:
                     return [{"type": "text", "text": f"Screen dumped to /tmp/screen_dump.log\n\n{screen_text}"}]
                 else:
                     return [{"type": "text", "text": "VT100 terminal not available"}]
-            
-            elif name == "sim_inject_input":
-                session.inject_console_input(arguments["data"])
-                return [{"type": "text", "text": f"Injected {len(arguments['data'])} characters to console RX"}]
             
             # Registers
             elif name == "sim_get_registers":

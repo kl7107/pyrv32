@@ -560,13 +560,17 @@ class RV32System:
             data: String or bytes to send to program
         """
         if isinstance(data, str):
-            data = data.encode('utf-8')
-        
-        print(f"[CONSOLE_UART_WRITE] Writing {len(data)} bytes to RX buffer", flush=True)
-        
-        # Directly add to RX buffer for programmatic control
-        for byte in data:
-            self.memory.console_uart.rx_buffer.append(byte)
+            # The console injection path only delivers carriage returns. Normalize
+            # inbound LF so firmware sees consistent line endings.
+            normalized = data.replace('\n', '\r')
+            data_bytes = normalized.encode('utf-8')
+        else:
+            data_bytes = data.replace(b'\n', b'\r')
+
+        print(f"[CONSOLE_UART_WRITE] Writing {len(data_bytes)} bytes to RX buffer", flush=True)
+
+        # Route through ConsoleUART helper so RX logging stays consistent.
+        self.memory.console_uart.inject_input(data_bytes)
         
         print(f"[CONSOLE_UART_WRITE] RX buffer now has {len(self.memory.console_uart.rx_buffer)} bytes", flush=True)
     
@@ -844,4 +848,4 @@ class RV32System:
         Args:
             data: String or bytes to inject
         """
-        self.memory.console_uart.inject_input(data)
+        self.console_uart_write(data)

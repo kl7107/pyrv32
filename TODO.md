@@ -48,7 +48,8 @@ Always keep going — GO GO GO!
   - `TESTING.md` now explains prerequisites, the `python3 run_sim_tests.py --fail-under 70` invocation, selective flags, coverage behavior, and expected artifacts.
 - [x] Schedule the unified runner (cron/CI) to execute continuously and publish results, guaranteeing progress even when the user is away.
   - Added `.github/workflows/run-sim-tests.yml` which installs the RISC-V toolchain plus coverage deps, runs `python3 run_sim_tests.py --fail-under 70` on pushes/pull requests, and executes nightly via cron.
-- [ ] Review MCP server console UART write/inject path for redundancy or dead code.
+- [x] Review MCP server console UART write/inject path for redundancy or dead code.
+  - `RV32System.console_uart_write` now handles LF→CR normalization and routes through `ConsoleUART.inject_input`, and `sim_inject_input` is just an alias to `sim_console_uart_write`, eliminating the duplicate code path.
 - [ ] Improve MCP error reporting for syscall failures (surface errno, offending syscall, and arguments).
 - [ ] Add register delta/diff reporting to MCP halts so successive `sim_get_registers` calls highlight ABI changes automatically.
 - [ ] Add missing syscalls as they are discovered during NetHack play.
