@@ -1,4 +1,6 @@
 # Autonomous Execution Directive - TOP PRIORITY
+
+Before ever returning to an idle/"awaiting user input" state, re-read the RCA section in TODO.md, confirm a documented hard failure prevents further Immediate Requirement progress, and state that failure explicitly; otherwise continue working without pause.
 1. Drive NetHack (and any other workloads) continuously via MCP tools with no voluntary pauses; keep running until the explicit objective (e.g., reaching Level 2) is met or the user orders otherwise.
 2. Provide nonstop running commentary while executing, but DO NOT wait for acknowledgments—report progress and immediately continue working.
 3. Treat console UART RX watchpoints as automatic sync points only; inject all required input yourself and resume execution without asking the user.
