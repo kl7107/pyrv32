@@ -38,9 +38,10 @@ Always keep going — GO GO GO!
 ## ⚙️ Simulator / MCP / Debugger Improvements (Do These First)
 
 ### Immediate Blockers
+> **No-Pause Guard:** Do not stop working, summarize, or reply until every item below is either completed or a hard blocker (with failing command, reproduction notes, and next experiment) is logged directly underneath it.
 - [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.).
-- [ ] Create a single top-level script (e.g., `./run_sim_tests.sh`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
-- [ ] Integrate automated coverage reporting (coverage.py or similar) so every test run emits a coverage summary and fails when coverage regresses.
+- [x] Create a single top-level script (`./run_sim_tests.py`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
+- [x] Integrate automated coverage reporting so every test run emits a coverage summary and fails when coverage regresses.
 - [ ] Document the unified test+coverage workflow so every assistant can run it autonomously (no user prompts required).
 - [ ] Schedule the unified runner (cron/CI) to execute continuously and publish results, guaranteeing progress even when the user is away.
 - [ ] Review MCP server console UART write/inject path for redundancy or dead code.
@@ -48,7 +49,6 @@ Always keep going — GO GO GO!
 - [ ] Add register delta/diff reporting to MCP halts so successive `sim_get_registers` calls highlight ABI changes automatically.
 - [ ] Add missing syscalls as they are discovered during NetHack play.
 - [ ] Optimize stdio buffering paths if profiling shows excessive churn.
-
 ### Performance & Instrumentation
 - [ ] Performance profiling infrastructure (cycle counts, hotspots, trace export).
 - [ ] Memory access optimization (faster load/store paths, batching).
@@ -70,6 +70,8 @@ Always keep going — GO GO GO!
 **Objective:** Drive NetHack from fresh launch through Level 1 and descend the stairs using the MCP workflow only.
 
 > **Autonomy Marker:** Expect to progress through the entire "Simulator / MCP / Debugger Improvements" section, plus the character creation + Level 1 macro work, before needing to pause for new guidance. Only stop early if blockers arise that violate the MCP debugging rules above.
+
+> **Stop Condition:** Before any final response, either (a) cite the documented hard blocker entry (with reproduction + next action) or (b) state the exact Immediate Blocker task that is currently in-progress.
 
 - [ ] **Stabilize MCP/debugger tooling (blocking)** – Complete every item in the "Simulator / MCP / Debugger Improvements" section above before pushing gameplay automation.
 - [ ] **Complete NetHack character creation** – Automate the entire prompt sequence.
@@ -146,6 +148,11 @@ Always keep going — GO GO GO!
 
 ### MCP NetHack Smoke Test (Dec 3, 2025)
 - Started a fresh MCP session, loaded `nethack-3.4.3/src/nethack.elf` via `sim_load_elf`, and drove the game through the initial prompts using `sim_run_until_console_status_read` plus UART read/write calls to confirm the refactored register/output workflow doesn’t break NetHack startup.
+
+### Unified Test Runner + Coverage (Dec 3, 2025)
+- Added `run_sim_tests.py`, a single entry point that runs the `tests` package, `asm_tests/run_tests.py`, and `run_c_tests.py` so simulator/MCP suites share one command and no coverage gaps remain.
+- Integrated coverage.py into the runner with automatic `coverage erase/combine/report`, parallel data files, and optional `--fail-under` enforcement so regressions fail fast.
+- Wired the new runner to the existing `tests/__main__.py` scaffolding and `.coveragerc` so branch coverage and source scoping remain consistent across all suites.
 
 ### NetHack Makefile Consolidation
 - Introduced `sys/pyrv32/toolchain.mk` so all PyRV32 builds share toolchain paths, runtime object lists, and default CFLAGS/LDFLAGS instead of duplicating them across `Makefile.src` and `Makefile.utl`.

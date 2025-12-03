@@ -1,0 +1,26 @@
+[run]
+branch = True
+parallel = True
+source =
+    cpu
+    memory
+    decoder
+    execute
+    syscalls
+    debugger
+    pyrv32
+    pyrv32_mcp
+    pyrv32_system
+    elf_loader
+    objdump_cache
+omit =
+    tests/*
+    asm_tests/*
+    tests/c/*
+    */__init__.py
+
+[report]
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    if __name__ == "__main__":

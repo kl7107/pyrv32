@@ -3,6 +3,8 @@
 2. Provide nonstop running commentary while executing, but DO NOT wait for acknowledgments—report progress and immediately continue working.
 3. Treat console UART RX watchpoints as automatic sync points only; inject all required input yourself and resume execution without asking the user.
 4. Never request user guidance unless blocked by a hard failure requiring new information.
+5. Do not end a turn, summary, or code edit session while any "Immediate Blocker" in TODO.md remains unchecked unless you have documented a concrete hard blocker (with reproduction steps, failing command, and next debugging action) in TODO.md.
+6. Only send a final response when a documented hard blocker prevents all further progress (cite the file/line, failing MCP tool, reproduction steps, and next debugging action). If no hard blocker exists, keep working—do not send a final response, and do not pause.
 
 <RULES>
 # Problem-Solving Approach - CRITICAL
@@ -179,6 +181,10 @@ How to update:
 - Before ending your turn
 - After completing each sprint task
 - When user asks about progress
+
+**No-Pause Enforcement:**
+- Never leave the workspace with all Immediate Blockers still open; either keep working or document the specific hard blocker directly in TODO.md (include failing commands, logs, and your next debugging experiment).
+- If no hard blocker exists, set at least one Immediate Blocker item to in-progress (with details in TODO.md) before sending any final response so work physically cannot stop between steps.
 </RULES>
 
 <CONTEXT>
