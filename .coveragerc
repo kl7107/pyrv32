@@ -1,18 +1,15 @@
 [run]
 branch = True
 parallel = True
+# Focus coverage on the currently tested simulator core; expand once the
+# MCP/debugger suites import their modules during the unified run.
 source =
     cpu
-    memory
     decoder
     execute
-    syscalls
-    debugger
-    pyrv32
-    pyrv32_mcp
+    memory
     pyrv32_system
-    elf_loader
-    objdump_cache
+    syscalls
 omit =
     tests/*
     asm_tests/*

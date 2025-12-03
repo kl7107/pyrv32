@@ -185,37 +185,34 @@ class SyscallHandler:
         return fd
     
     def _sim_to_host_path(self, sim_path):
-        """
-        Convert simulated absolute path to host path.
-        
-        Args:
-            sim_path: Simulated path (e.g., "/nethack/save" or "file.txt")
-            
-        Returns:
-            Host path (e.g., "./pyrv32_sim_fs/nethack/save")
-        """
-        # Handle relative paths by joining with cwd first
-        if not sim_path.startswith('/'):
-            sim_path = os.path.join(self.cwd, sim_path)
-        
-        # Normalize the path to resolve .. and . components
-        # This must be done BEFORE removing the leading slash
-        sim_path = os.path.normpath(sim_path)
-        
-        # Remove leading slash
+        """Convert simulator path to host path while preventing fs_root escapes."""
+        # Build starting stack from current working directory for relative paths
         if sim_path.startswith('/'):
-            sim_path = sim_path[1:]
+            path_stack = []
+        else:
+            if self.cwd == '/':
+                path_stack = []
+            else:
+                path_stack = [part for part in self.cwd.strip('/').split('/') if part]
         
-        # Join with fs_root
-        host_path = os.path.join(self.fs_root, sim_path)
+        # Process each component manually so we can detect attempts to walk above root
+        for part in sim_path.split('/'):
+            if part == '' or part == '.':
+                continue
+            if part == '..':
+                if path_stack:
+                    path_stack.pop()
+                else:
+                    return None  # Attempt to escape above simulated root
+            else:
+                path_stack.append(part)
         
-        # Ensure path stays within fs_root (prevent escapes)
+        # Construct normalized simulator path
+        rel_path = os.path.join(*path_stack) if path_stack else ''
+        host_path = os.path.join(self.fs_root, rel_path)
         host_path = os.path.abspath(host_path)
-        
         if not host_path.startswith(self.fs_root):
-            # Path escape attempt - treat as EACCES
             return None
-        
         return host_path
     
     # Syscall implementations

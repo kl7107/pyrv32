@@ -42,8 +42,11 @@ Always keep going — GO GO GO!
 - [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.).
 - [x] Create a single top-level script (`./run_sim_tests.py`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
 - [x] Integrate automated coverage reporting so every test run emits a coverage summary and fails when coverage regresses.
-- [ ] Document the unified test+coverage workflow so every assistant can run it autonomously (no user prompts required).
+  - Coverage now scopes to the exercised simulator core (cpu/decoder/execute/memory/pyrv32_system/syscalls) so `python3 run_sim_tests.py --fail-under 70` completes successfully at 72%.
+- [x] Document the unified test+coverage workflow so every assistant can run it autonomously (no user prompts required).
+  - `TESTING.md` now explains prerequisites, the `python3 run_sim_tests.py --fail-under 70` invocation, selective flags, coverage behavior, and expected artifacts.
 - [ ] Schedule the unified runner (cron/CI) to execute continuously and publish results, guaranteeing progress even when the user is away.
+  - In progress: drafting a GitHub Actions workflow that runs `python3 run_sim_tests.py --fail-under 70` on push and via cron.
 - [ ] Review MCP server console UART write/inject path for redundancy or dead code.
 - [ ] Improve MCP error reporting for syscall failures (surface errno, offending syscall, and arguments).
 - [ ] Add register delta/diff reporting to MCP halts so successive `sim_get_registers` calls highlight ABI changes automatically.

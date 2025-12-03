@@ -583,20 +583,23 @@ class RV32System:
     # Legacy/convenience methods - default to debug UART for backward compatibility
     
     def uart_read(self):
-        """Read from debug UART (legacy method)."""
+        """Read from console UART first, falling back to debug UART for legacy callers."""
+        data = self.console_uart_read()
+        if data:
+            return data
         return self.debug_uart_read()
     
     def uart_read_all(self):
-        """Read all from debug UART (legacy method)."""
-        return self.debug_uart_read_all()
+        """Return combined console + debug UART output for backward compatibility."""
+        return self.console_uart_read_all() + self.debug_uart_read_all()
     
     def uart_write(self, data):
         """Write to console UART RX (legacy method)."""
         return self.console_uart_write(data)
     
     def uart_has_data(self):
-        """Check debug UART has data (legacy method)."""
-        return self.debug_uart_has_data()
+        """Check either UART has unread data (legacy method)."""
+        return self.console_uart_has_data() or self.debug_uart_has_data()
     
     # Register/Memory access
     
@@ -699,6 +702,15 @@ class RV32System:
         """
         for i, byte in enumerate(data):
             self.memory.write_byte(address + i, byte)
+    
+    def load_binary_data(self, data, address=None):
+        """Legacy helper to write raw program bytes into memory and reset PC."""
+        if not isinstance(data, (bytes, bytearray)):
+            raise TypeError("data must be bytes or bytearray")
+        address = self.start_addr if address is None else address
+        self.write_memory(address, data)
+        self.cpu.pc = address
+        return len(data)
     
     # Breakpoint management
     

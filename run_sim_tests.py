@@ -128,10 +128,10 @@ def select_steps(args: argparse.Namespace) -> List[TestStep]:
 def ensure_coverage(args: argparse.Namespace) -> str | None:
     if args.no_coverage:
         return None
-    coverage_cmd = shutil.which("coverage")
+    coverage_cmd = shutil.which("coverage") or shutil.which("python3-coverage")
     if coverage_cmd is None:
         raise SystemExit(
-            "coverage not found in PATH. Install it (pip install coverage) or rerun with --no-coverage."
+            "coverage not found in PATH (looked for 'coverage' and 'python3-coverage'). Install it or rerun with --no-coverage."
         )
     # Reset previous data so each run starts clean.
     subprocess.run([coverage_cmd, "erase"], cwd=ROOT, check=True)
