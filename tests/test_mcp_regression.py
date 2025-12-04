@@ -77,9 +77,9 @@ def _sb(rs1, rs2, imm):
     return (imm_hi << 25) | (rs2 << 20) | (rs1 << 15) | (0 << 12) | (imm_lo << 7) | 0x23
 
 
-def _call_tool_text(server, name, **arguments):
+def _call_tool_text(server, tool_name, **arguments):
     """Call an MCP tool synchronously and return concatenated text blocks."""
-    response = asyncio.run(server.call_tool(name, arguments))
+    response = asyncio.run(server.call_tool(tool_name, arguments))
     return "\n".join(block.get('text', '') for block in response if block.get('type') == 'text')
 
 
@@ -500,6 +500,235 @@ def test_mcp_watchpoint_tools_cover_read_and_write(runner):
             list_text = _call_tool_text(server, 'sim_list_watchpoints', session_id=session_id)
             if 'No watchpoints set' not in list_text:
                 runner.test_fail('mcp watchpoint removal final', 'No watchpoints set', list_text)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
+def test_mcp_load_elf_metadata_and_get_load_info(runner):
+    """sim_load_elf should populate metadata retrievable via sim_get_load_info."""
+    if not os.path.exists(HELLO_ELF):
+        runner.test_fail('mcp load_elf metadata', 'hello.elf exists', 'missing hello.elf')
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp load_elf sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            load_text = _call_tool_text(
+                server,
+                'sim_load_elf',
+                session_id=session_id,
+                elf_path=HELLO_ELF
+            )
+
+            for needle in ('Entry point:', 'Bytes loaded:', 'Symbols loaded:', 'Segments:'):
+                if needle not in load_text:
+                    runner.test_fail('mcp load_elf metadata text', needle, load_text)
+
+            info_text = _call_tool_text(server, 'sim_get_load_info', session_id=session_id)
+            if HELLO_ELF not in info_text:
+                runner.test_fail('mcp get_load_info path', HELLO_ELF, info_text)
+            if 'Segments (' not in info_text:
+                runner.test_fail('mcp get_load_info segments', 'segment listing', info_text)
+            if 'Entry point:' not in info_text:
+                runner.test_fail('mcp get_load_info entry', 'Entry point line', info_text)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
+def test_mcp_console_uart_write_and_run_until_output(runner):
+    """Console UART tooling should inject input and halt when output appears."""
+    console_echo_program = _asm(
+        _lui(5, 0x10001),   # t0 = console UART base
+        _lbu(6, 5, 8),      # touch RX status (ensures data consumed)
+        _lbu(7, 5, 4),      # load byte from RX FIFO
+        _sb(5, 7, 0),       # write byte to TX
+        0x00100073          # ebreak
+    )
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp console sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            _write_program_via_tools(server, session_id, console_echo_program)
+
+            write_text = _call_tool_text(
+                server,
+                'sim_console_uart_write',
+                session_id=session_id,
+                data='R'
+            )
+            if 'Data written' not in write_text:
+                runner.test_fail('mcp console write ack', 'Data written message', write_text)
+
+            run_text = _call_tool_text(server, 'sim_run_until_output', session_id=session_id, max_steps=16)
+            if 'Status:' not in run_text or 'PC:' not in run_text:
+                runner.test_fail('mcp run_until_output response', 'status + pc text', run_text)
+
+            has_data = _call_tool_text(server, 'sim_console_uart_has_data', session_id=session_id)
+            if 'True' not in has_data:
+                runner.test_fail('mcp console has data', 'True', has_data)
+
+            output = _call_tool_text(server, 'sim_console_uart_read', session_id=session_id)
+            if output.strip() != 'R':
+                runner.test_fail('mcp console read', 'R', output)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
+def test_mcp_vt100_screen_tools_capture_output(runner):
+    """sim_get_screen and sim_dump_screen should expose VT100 contents via MCP."""
+    message = 'Screen MCP!'
+    words = [0x100012B7]
+    for char in message + '\n':
+        words.append(_addi_t1(ord(char)))
+        words.append(0x00628023)
+    words.append(0x00100073)
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp vt100 sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            _write_program_via_tools(server, session_id, _asm(*words))
+            run_text = _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=256)
+            if 'Status:' not in run_text:
+                runner.test_fail('mcp vt100 run', 'status text', run_text)
+
+            screen_text = _call_tool_text(server, 'sim_get_screen', session_id=session_id)
+            if message not in screen_text:
+                runner.test_fail('mcp get_screen content', message, screen_text)
+
+            dump_text = _call_tool_text(server, 'sim_dump_screen', session_id=session_id)
+            if 'Screen dumped' not in dump_text or message not in dump_text:
+                runner.test_fail('mcp dump_screen output', 'dump notice + message', dump_text)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
+def test_mcp_symbol_and_disassembly_tools(runner):
+    """Symbol lookup, reverse lookup, and cached disassembly should align with RV32System."""
+    if not os.path.exists(HELLO_ELF):
+        runner.test_fail('mcp symbol tools', 'hello.elf exists', 'missing hello.elf')
+
+    reference = RV32System()
+    reference.load_elf(HELLO_ELF)
+    main_addr = reference.lookup_symbol('main')
+    if main_addr is None:
+        runner.test_fail('mcp symbol tools ref main', 'main symbol present', None)
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp symbol sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            _call_tool_text(server, 'sim_load_elf', session_id=session_id, elf_path=HELLO_ELF)
+
+            lookup_text = _call_tool_text(server, 'sim_lookup_symbol', session_id=session_id, name='main')
+            try:
+                looked_up = int(lookup_text.strip(), 16)
+            except ValueError:
+                runner.test_fail('mcp lookup_symbol format', 'hex value', lookup_text)
+            if looked_up != main_addr:
+                runner.test_fail('mcp lookup_symbol value', hex(main_addr), lookup_text)
+
+            reverse_text = _call_tool_text(
+                server,
+                'sim_reverse_lookup',
+                session_id=session_id,
+                address=f"0x{looked_up:08x}"
+            )
+            if reverse_text.strip() != 'main':
+                runner.test_fail('mcp reverse_lookup', 'main', reverse_text)
+
+            info_text = _call_tool_text(
+                server,
+                'sim_get_symbol_info',
+                session_id=session_id,
+                address=f"0x{(main_addr + 4):08x}"
+            )
+            if 'main+4' not in info_text:
+                runner.test_fail('mcp get_symbol_info', 'main+4 text', info_text)
+
+            disasm_text = _call_tool_text(
+                server,
+                'sim_disasm_cached',
+                session_id=session_id,
+                start_addr=f"0x{main_addr:08x}",
+                end_addr=f"0x{(main_addr + 0x20):08x}"
+            )
+            if 'main' not in disasm_text or '0x' not in disasm_text:
+                runner.test_fail('mcp disasm_cached', 'symbol header + addresses', disasm_text[:80])
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
+def test_mcp_trace_buffer_reporting(runner):
+    """Trace buffer tool should enable tracing and return recent PCs."""
+    simple_program = _asm(
+        _addi_t1(1),
+        _addi_t1(2),
+        _addi_t1(3),
+        0x00100073
+    )
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp trace sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            _write_program_via_tools(server, session_id, simple_program)
+
+            initial_trace = _call_tool_text(server, 'sim_get_trace', session_id=session_id, count=4)
+            if 'Trace buffer empty' not in initial_trace:
+                runner.test_fail('mcp trace initial', 'empty message', initial_trace)
+
+            _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=32)
+
+            trace_text = _call_tool_text(server, 'sim_get_trace', session_id=session_id, count=4)
+            if 'PC=0x' not in trace_text:
+                runner.test_fail('mcp trace output', 'PC entries present', trace_text)
 
         finally:
             if session_id:

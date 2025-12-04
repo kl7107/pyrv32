@@ -13,16 +13,7 @@ DO NOT STOP WORKING UNTIL ALL, REPEAT ALL!!!!!, REQUIREMENTS ARE MET !!!!!!!!!!!
 
 
 
-# Autonomous Execution Directive - TOP PRIORITY
-
-Before ever returning to an idle/"awaiting user input" state, re-read the RCA section in TODO.md, confirm a documented hard failure prevents further Immediate Requirement progress, and state that failure explicitly; otherwise continue working without pause.
-
-**ACTIVE WORK REQUIREMENT (Dec 3, 2025):** Do not send *any* response unless a concrete task is currently in-flight. This means either
-1. An MCP/test/tool command is running (cite which one and its purpose), or
-2. You are mid-edit in a file change directly tied to an Immediate Requirement (describe the edit and resume immediately afterward).
-
-If a user interrupts, restate which Immediate Requirement remains in-progress and what command/edit continues next, then keep working. Logging another idle gap without an in-flight task requires a fresh RCA entry (with timestamps, command history, and next experiment) before speaking again.
-1. Drive NetHack (and any other workloads) continuously via MCP tools with no voluntary pauses; keep running until the explicit objective (e.g., reaching Level 2) is met or the user orders otherwise.
+1. Drive NetHack (and any other workloads) continuously via MCP tools keep running until the explicit objective (e.g., reaching Level 2) is met.
 3. Treat console UART RX watchpoints as automatic sync points only; inject all required input yourself and resume execution without asking the user.
 4. Never request user guidance unless blocked by a hard failure requiring new information.
 5. Do not end a turn, summary, or code edit session while any "Immediate Requirement" in TODO.md remains unchecked unless you have documented a concrete hard failure (with reproduction steps, failing command, and next debugging action) in TODO.md.
