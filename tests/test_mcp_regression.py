@@ -596,6 +596,119 @@ def test_mcp_console_uart_write_and_run_until_output(runner):
             server.log_fp.close()
 
 
+def test_mcp_step_single_instruction(runner):
+    """sim_step should advance the PC deterministically and halt on ebreak."""
+    stepping_program = _asm(
+        _addi_t1(1),
+        _addi_t1(2),
+        _addi_t1(3),
+        0x00100073
+    )
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp step sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            _write_program_via_tools(server, session_id, stepping_program)
+
+            running_text = _call_tool_text(
+                server,
+                'sim_step',
+                session_id=session_id,
+                count=3
+            )
+            expected_pc = f"PC: 0x{(PROGRAM_START + 12):08x}"
+            if 'Status: running' not in running_text:
+                runner.test_fail('mcp step running status', 'Status: running', running_text)
+            if 'Instructions: 3' not in running_text:
+                runner.test_fail('mcp step instruction count', 'Instructions: 3', running_text)
+            if expected_pc not in running_text:
+                runner.test_fail('mcp step pc advance', expected_pc, running_text)
+
+            halt_text = _call_tool_text(server, 'sim_step', session_id=session_id)
+            if 'Status: halted' not in halt_text:
+                runner.test_fail('mcp step halt status', 'Status: halted', halt_text)
+            if 'Instructions: 0' not in halt_text:
+                runner.test_fail('mcp step halt instruction count', 'Instructions: 0', halt_text)
+            if expected_pc not in halt_text:
+                runner.test_fail('mcp step halt pc', expected_pc, halt_text)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
+def test_mcp_read_memory_tool(runner):
+    """sim_read_memory should return hex bytes that mirror RAM contents."""
+    base_addr = 0x80005000
+    initial_payload = bytes.fromhex('0123456789abcdef')
+    update_program = _asm(
+        _lui(5, base_addr >> 12),
+        _addi_t1(0x5A),
+        _sb(5, 6, 0),
+        0x00100073
+    )
+
+    session_id = None
+    with tempfile.TemporaryDirectory() as tmp_fs_root:
+        server = MCPSimulatorServer()
+        try:
+            _call_tool_text(server, 'sim_create', fs_root=tmp_fs_root)
+            sessions = server.session_manager.list_sessions()
+            if not sessions:
+                runner.test_fail('mcp read_memory sim_create', 'session created', sessions)
+            session_id = sessions[0]
+
+            address_hex = f"0x{base_addr:08x}"
+            payload_hex = initial_payload.hex()
+            _call_tool_text(
+                server,
+                'sim_write_memory',
+                session_id=session_id,
+                address=address_hex,
+                data=payload_hex
+            )
+
+            read_text = _call_tool_text(
+                server,
+                'sim_read_memory',
+                session_id=session_id,
+                address=address_hex,
+                length=len(initial_payload)
+            ).strip()
+            if read_text != payload_hex:
+                runner.test_fail('mcp read_memory initial', payload_hex, read_text)
+
+            _write_program_via_tools(server, session_id, update_program)
+            run_text = _call_tool_text(server, 'sim_run', session_id=session_id, max_steps=16)
+            if 'Status:' not in run_text:
+                runner.test_fail('mcp read_memory run status', 'Status line present', run_text)
+
+            updated_payload = bytes([0x5A]) + initial_payload[1:]
+            updated_hex = updated_payload.hex()
+            read_text_after = _call_tool_text(
+                server,
+                'sim_read_memory',
+                session_id=session_id,
+                address=address_hex,
+                length=len(initial_payload)
+            ).strip()
+            if read_text_after != updated_hex:
+                runner.test_fail('mcp read_memory after cpu write', updated_hex, read_text_after)
+
+        finally:
+            if session_id:
+                _call_tool_text(server, 'sim_destroy', session_id=session_id)
+            server.log_fp.close()
+
+
 def test_mcp_vt100_screen_tools_capture_output(runner):
     """sim_get_screen and sim_dump_screen should expose VT100 contents via MCP."""
     message = 'Screen MCP!'

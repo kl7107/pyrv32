@@ -38,7 +38,7 @@ Always keep going — GO GO GO!
 
 ## ⚙️ Simulator / MCP / Debugger Improvements (Do These First)
 
-- [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.). *(In progress – Dec 4: SessionManager/register/run_until/VT100/memory tests landed, docs/mcp_regression_coverage.md updated, and `python3 run_sim_tests.py --fail-under 70` now passes at 78% after adding UART run-until-output, VT100 screen helpers, load-info, symbol/disassembly, and trace-buffer MCP regression tests.)*
+- [ ] Establish regression tests for every existing MCP/simulator/debugger feature before adding new ones (cover UART paths, syscall surfacing, register dumps, ELF loader, watchpoints, etc.). *(In progress – Dec 4: SessionManager/register/run_until/VT100/memory tests landed, docs/mcp_regression_coverage.md updated, and `python3 run_sim_tests.py --fail-under 70` now passes at 78% after adding UART run-until-output, VT100 screen helpers, load-info, symbol/disassembly, trace-buffer, sim_step, and sim_read_memory MCP regression tests.)*
 - [x] Create a single top-level script (`./run_sim_tests.py`) that executes all simulator/MCP/debugger unit + integration tests so no suites are skipped.
 - [x] Integrate automated coverage reporting so every test run emits a coverage summary and fails when coverage regresses.
   - Coverage now scopes to the exercised simulator core (cpu/decoder/execute/memory/pyrv32_system/syscalls) so `python3 run_sim_tests.py --fail-under 70` completes successfully at 72%.
