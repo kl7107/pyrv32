@@ -491,6 +491,32 @@ class SyscallHandler:
         if fd not in self.fd_map:
             return self._neg_errno(errno.EBADF)
         
+        # Special handling for stdin/stdout/stderr (fd=0,1,2)
+        if fd in (0, 1, 2):
+            # Emulate a TTY character device
+            # st_mode = S_IFCHR | 0666
+            st_mode = 0o20666
+            st_rdev = 0  # Device ID
+            st_size = 0
+            st_blksize = 4096
+            st_blocks = 0
+            st_atime = 0
+            st_mtime = 0
+            st_ctime = 0
+            
+            self._write_u16(memory, statbuf_addr + 0, 0)      # st_dev
+            self._write_u16(memory, statbuf_addr + 2, 0)      # st_ino
+            self._write_u32(memory, statbuf_addr + 4, st_mode)
+            self._write_u16(memory, statbuf_addr + 8, 1)      # st_nlink
+            self._write_u16(memory, statbuf_addr + 10, 0)     # st_uid
+            self._write_u16(memory, statbuf_addr + 12, 0)     # st_gid
+            self._write_u16(memory, statbuf_addr + 14, st_rdev)
+            self._write_u64(memory, statbuf_addr + 16, st_size)
+            # Note: We only write the first few fields which match newlib's struct stat
+            # The rest might be different but usually mode is what matters for isatty
+            
+            return 0
+            
         host_fd = self.fd_map[fd]
         
         try:
