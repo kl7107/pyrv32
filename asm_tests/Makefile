@@ -8,7 +8,7 @@ OBJCOPY = riscv64-unknown-elf-objcopy
 OBJDUMP = riscv64-unknown-elf-objdump
 
 # Flags
-ASFLAGS = -march=rv32i -mabi=ilp32
+ASFLAGS = -march=rv32im -mabi=ilp32
 OBJCOPY_FLAGS = -O binary
 
 # Find all .s files recursively

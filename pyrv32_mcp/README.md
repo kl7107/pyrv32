@@ -98,16 +98,45 @@ output = sim_uart_read(session)  # Game starts!
 
 ## Architecture
 
-- `pyrv32_server.py` - MCP server with 19 tool definitions
+- `sim_server_mcp_v2.py` - MCP server with 41 tool definitions (JSON-RPC over TCP)
 - `session_manager.py` - Manages multiple RV32System instances
-- `run_server.py` - Startup script
 - `test_integration.py` - End-to-end test
+- `test_interactive_tools.py` - Tests for interactive convenience tools
 - Uses `pyrv32_system.py` from parent directory (stateful simulator)
 
 **Note**: Package renamed from `mcp` to `pyrv32_mcp` to avoid shadowing the MCP library.
 
+## Running the Server
+
+```bash
+# Start server on port 5555
+python3 pyrv32_mcp/sim_server_mcp_v2.py
+```
+
 ## Development
 
-The server uses stdio transport for communication with MCP clients. All tools are async and return TextContent responses.
+The server uses JSON-RPC 2.0 over TCP (port 5555) for communication with MCP clients. All tools are async and return TextContent responses.
 
 Session IDs are UUIDs, allowing multiple independent simulator sessions.
+
+### MCP Tools (41 total)
+
+**Session**: sim_create, sim_destroy, sim_reset, sim_set_cwd, sim_get_status, sim_get_load_info
+
+**Execution**: sim_step, sim_run, sim_run_until_output, sim_run_until_console_status_read, sim_run_until_input_consumed, sim_run_until_idle
+
+**Interactive**: sim_send_input_and_run, sim_interactive_step, sim_inject_input
+
+**UART I/O**: sim_debug_uart_read, sim_debug_uart_has_data, sim_console_uart_read, sim_console_uart_write, sim_console_uart_has_data
+
+**Screen**: sim_get_screen, sim_dump_screen
+
+**Registers**: sim_get_registers, sim_get_register, sim_set_register
+
+**Memory**: sim_read_memory, sim_write_memory
+
+**Debugging**: sim_add_breakpoint, sim_remove_breakpoint, sim_list_breakpoints, sim_add_read_watchpoint, sim_remove_read_watchpoint, sim_add_write_watchpoint, sim_remove_write_watchpoint, sim_list_watchpoints, sim_get_trace
+
+**Symbols**: sim_lookup_symbol, sim_reverse_lookup, sim_get_symbol_info, sim_disassemble
+
+**Loading**: sim_load_elf
