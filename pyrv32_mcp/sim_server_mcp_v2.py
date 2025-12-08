@@ -223,36 +223,39 @@ class MCPSimulatorServer:
             },
             {
                 "name": "sim_run",
-                "description": "Run until halt, breakpoint, or max steps.",
+                "description": "Run until halt, breakpoint, or max steps. Optionally include screen state.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "Session identifier"},
-                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000}
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000},
+                        "include_screen": {"type": "boolean", "description": "Include VT100 screen in response (default: false)", "default": False}
                     },
                     "required": ["session_id"]
                 }
             },
             {
                 "name": "sim_run_until_output",
-                "description": "Run until UART output is available or halt.",
+                "description": "Run until UART output is available or halt. Optionally include screen state.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "Session identifier"},
-                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000}
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000},
+                        "include_screen": {"type": "boolean", "description": "Include VT100 screen in response (default: false)", "default": False}
                     },
                     "required": ["session_id"]
                 }
             },
             {
                 "name": "sim_run_until_console_status_read",
-                "description": "Run until a read instruction accesses Console UART RX Status (0x10001008). Useful for detecting when a program polls for input.",
+                "description": "Run until a read instruction accesses Console UART RX Status (0x10001008). Useful for detecting when a program polls for input. Optionally include screen state.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "session_id": {"type": "string", "description": "Session identifier"},
-                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000}
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000},
+                        "include_screen": {"type": "boolean", "description": "Include VT100 screen in response (default: false)", "default": False}
                     },
                     "required": ["session_id"]
                 }
@@ -566,6 +569,61 @@ class MCPSimulatorServer:
                     },
                     "required": ["session_id", "start_addr", "end_addr"]
                 }
+            },
+            # === NEW HIGH-LEVEL INTERACTIVE TOOLS ===
+            {
+                "name": "sim_run_until_input_consumed",
+                "description": "Run until input buffer is empty. If then_idle=True (default), continues running until program has done significant work after consuming input, ensuring screen updates have occurred.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000},
+                        "then_idle": {"type": "boolean", "description": "Continue until idle after input consumed (default: true)", "default": True},
+                        "min_idle_instructions": {"type": "integer", "description": "Min instructions to consider idle (default: 100)", "default": 100}
+                    },
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_run_until_idle",
+                "description": "Run until program executes significant work (min_instructions) between input polls. Useful for detecting when program has finished processing and is idle.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 1000000)", "default": 1000000},
+                        "min_instructions": {"type": "integer", "description": "Minimum instructions between polls to consider idle (default: 1000)", "default": 1000}
+                    },
+                    "required": ["session_id"]
+                }
+            },
+            {
+                "name": "sim_send_input_and_run",
+                "description": "Write input to console UART and run until consumed. Returns status and optionally screen. This is the primary convenience method for interactive programs - replaces the pattern of console_uart_write + multiple run_until_console_status_read calls.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "data": {"type": "string", "description": "Input string to send (use \\n for Enter)"},
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 5000000)", "default": 5000000},
+                        "include_screen": {"type": "boolean", "description": "Include VT100 screen in response (default: true)", "default": True}
+                    },
+                    "required": ["session_id", "data"]
+                }
+            },
+            {
+                "name": "sim_interactive_step",
+                "description": "High-level 'do what I mean' for interactive programs. Injects input, runs until program is idle and waiting for more input, returns screen. One call replaces 5-8 lower-level calls.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session identifier"},
+                        "data": {"type": "string", "description": "Input string (use \\n for Enter)"},
+                        "max_steps": {"type": "integer", "description": "Maximum instructions (default: 5000000)", "default": 5000000}
+                    },
+                    "required": ["session_id", "data"]
+                }
             }
         ]
     
@@ -647,6 +705,10 @@ class MCPSimulatorServer:
                 text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
                 if result.error:
                     text += f"\nError: {result.error}"
+                if arguments.get("include_screen", False):
+                    screen = session.get_screen_text()
+                    if screen:
+                        text += f"\n\n=== SCREEN ===\n{screen}"
                 return [{"type": "text", "text": text}]
             
             elif name == "sim_run_until_output":
@@ -654,6 +716,10 @@ class MCPSimulatorServer:
                 text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
                 if result.error:
                     text += f"\nError: {result.error}"
+                if arguments.get("include_screen", False):
+                    screen = session.get_screen_text()
+                    if screen:
+                        text += f"\n\n=== SCREEN ===\n{screen}"
                 return [{"type": "text", "text": text}]
             
             elif name == "sim_run_until_console_status_read":
@@ -661,6 +727,60 @@ class MCPSimulatorServer:
                 text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
                 if result.error:
                     text += f"\nError: {result.error}"
+                if arguments.get("include_screen", False):
+                    screen = session.get_screen_text()
+                    if screen:
+                        text += f"\n\n=== SCREEN ===\n{screen}"
+                return [{"type": "text", "text": text}]
+            
+            # === NEW HIGH-LEVEL INTERACTIVE TOOLS ===
+            
+            elif name == "sim_run_until_input_consumed":
+                result = session.run_until_input_consumed(
+                    arguments.get("max_steps", 1000000),
+                    arguments.get("then_idle", True),
+                    arguments.get("min_idle_instructions", 100)
+                )
+                text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
+                if result.error:
+                    text += f"\nError: {result.error}"
+                return [{"type": "text", "text": text}]
+            
+            elif name == "sim_run_until_idle":
+                result = session.run_until_idle(
+                    arguments.get("max_steps", 1000000),
+                    arguments.get("min_instructions", 1000)
+                )
+                text = f"Status: {result.status}\nInstructions: {result.instruction_count}\nPC: 0x{result.pc:08x}"
+                if result.error:
+                    text += f"\nError: {result.error}"
+                return [{"type": "text", "text": text}]
+            
+            elif name == "sim_send_input_and_run":
+                data = arguments["data"]
+                max_steps = arguments.get("max_steps", 5000000)
+                include_screen = arguments.get("include_screen", True)
+                
+                result = session.send_input_and_run(data, max_steps, include_screen)
+                
+                text = f"Status: {result['status']}\nInstructions: {result['instructions']}\nPC: 0x{result['pc']:08x}"
+                if result.get('error'):
+                    text += f"\nError: {result['error']}"
+                if include_screen and result.get('screen'):
+                    text += f"\n\n=== SCREEN ===\n{result['screen']}"
+                return [{"type": "text", "text": text}]
+            
+            elif name == "sim_interactive_step":
+                data = arguments["data"]
+                max_steps = arguments.get("max_steps", 5000000)
+                
+                result = session.interactive_step(data, max_steps)
+                
+                text = f"Status: {result['status']}\nInstructions: {result['instructions']}\nPC: 0x{result['pc']:08x}"
+                if result.get('error'):
+                    text += f"\nError: {result['error']}"
+                if result.get('screen'):
+                    text += f"\n\n=== SCREEN ===\n{result['screen']}"
                 return [{"type": "text", "text": text}]
             
             elif name == "sim_get_status":

@@ -494,6 +494,195 @@ class RV32System:
         
         return result
     
+    def run_until_input_consumed(self, max_steps=1000000, then_idle=True, min_idle_instructions=100):
+        """
+        Run until input buffer is empty AND optionally until program is idle.
+        
+        This method keeps running past quick status-read hits until all injected 
+        input has been consumed. If then_idle=True (default), it also waits until
+        the program has done significant work after consuming input, ensuring
+        screen updates have occurred.
+        
+        Args:
+            max_steps: Maximum total instructions to execute
+            then_idle: If True, after input consumed, continue until idle
+            min_idle_instructions: Minimum instructions to consider "idle" (when then_idle=True)
+            
+        Returns:
+            ExecutionResult with cumulative instruction count and final state
+        """
+        CONSOLE_UART_RX_STATUS_ADDR = 0x10001008
+        total_executed = 0
+        input_consumed_at = 0
+        
+        # Check if watchpoint already exists
+        had_watchpoint = CONSOLE_UART_RX_STATUS_ADDR in self.memory.read_watchpoints
+        if not had_watchpoint:
+            self.add_read_watchpoint(CONSOLE_UART_RX_STATUS_ADDR)
+        
+        try:
+            while total_executed < max_steps:
+                # Run until we hit the status read watchpoint or another stop condition
+                remaining = max_steps - total_executed
+                result = self.run(remaining)
+                total_executed += result.instruction_count
+                
+                # If stopped for error, return
+                if result.status == 'error':
+                    return ExecutionResult(result.status, total_executed, result.error, result.pc)
+                if result.status == 'max_steps':
+                    return ExecutionResult(result.status, total_executed, result.error, result.pc)
+                
+                # Check if input buffer is empty
+                buffer_empty = len(self.memory.console_uart.rx_buffer) == 0
+                
+                if buffer_empty:
+                    if input_consumed_at == 0:
+                        input_consumed_at = total_executed
+                    
+                    if not then_idle:
+                        # Just return when buffer is empty
+                        return ExecutionResult('halted', total_executed, 
+                                              error="Input consumed, waiting for input", 
+                                              pc=result.pc)
+                    
+                    # With then_idle, check if we've run enough since input was consumed
+                    instructions_since_consumed = total_executed - input_consumed_at
+                    if instructions_since_consumed >= min_idle_instructions:
+                        return ExecutionResult('halted', total_executed, 
+                                              error=f"Input consumed, idle after {instructions_since_consumed} instructions", 
+                                              pc=result.pc)
+                else:
+                    # Reset if buffer has new data
+                    input_consumed_at = 0
+                
+                # There's still input or not yet idle - continue
+                # But if we're halted for another reason (breakpoint, ebreak), stop
+                if result.status == 'halted' and result.error:
+                    if 'watchpoint at 0x10001008' not in str(result.error).lower() and \
+                       'read watchpoint' not in str(result.error).lower():
+                        return ExecutionResult(result.status, total_executed, result.error, result.pc)
+        
+        finally:
+            # Remove temporary watchpoint if we added it
+            if not had_watchpoint:
+                if CONSOLE_UART_RX_STATUS_ADDR in self.memory.read_watchpoints:
+                    self.remove_read_watchpoint(CONSOLE_UART_RX_STATUS_ADDR)
+        
+        return ExecutionResult('max_steps', total_executed, pc=self.cpu.pc)
+    
+    def run_until_idle(self, max_steps=1000000, min_instructions=1000):
+        """
+        Run until program executes significant work between input polls.
+        
+        Keeps running past quick status-read hits until at least min_instructions
+        execute between polls, indicating meaningful processing happened (not just
+        character-by-character polling).
+        
+        Args:
+            max_steps: Maximum total instructions to execute
+            min_instructions: Minimum instructions between polls to consider "idle"
+            
+        Returns:
+            ExecutionResult with cumulative instruction count
+        """
+        CONSOLE_UART_RX_STATUS_ADDR = 0x10001008
+        total_executed = 0
+        
+        # Check if watchpoint already exists
+        had_watchpoint = CONSOLE_UART_RX_STATUS_ADDR in self.memory.read_watchpoints
+        if not had_watchpoint:
+            self.add_read_watchpoint(CONSOLE_UART_RX_STATUS_ADDR)
+        
+        try:
+            while total_executed < max_steps:
+                remaining = max_steps - total_executed
+                result = self.run(remaining)
+                total_executed += result.instruction_count
+                
+                # If stopped for non-watchpoint reason, return
+                if result.status == 'error':
+                    return ExecutionResult(result.status, total_executed, result.error, result.pc)
+                if result.status == 'max_steps':
+                    return ExecutionResult(result.status, total_executed, result.error, result.pc)
+                
+                # Check if we executed enough instructions to consider it "meaningful work"
+                if result.instruction_count >= min_instructions:
+                    return ExecutionResult('halted', total_executed, 
+                                          error=f"Idle after {result.instruction_count} instructions",
+                                          pc=result.pc)
+                
+                # Quick poll - keep running unless halted for other reason
+                if result.status == 'halted' and result.error:
+                    # Check if it's the RX status watchpoint
+                    if 'watchpoint at 0x10001008' not in str(result.error).lower() and \
+                       'read watchpoint' not in str(result.error).lower():
+                        # Some other halt reason - return it
+                        return ExecutionResult(result.status, total_executed, result.error, result.pc)
+        
+        finally:
+            if not had_watchpoint:
+                if CONSOLE_UART_RX_STATUS_ADDR in self.memory.read_watchpoints:
+                    self.remove_read_watchpoint(CONSOLE_UART_RX_STATUS_ADDR)
+        
+        return ExecutionResult('max_steps', total_executed, pc=self.cpu.pc)
+    
+    def send_input_and_run(self, data, max_steps=5000000, include_screen=True):
+        """
+        Write input to console UART and run until input is consumed and program is idle.
+        
+        This is the primary convenience method for interactive programs. It:
+        1. Injects input data into the console UART RX buffer
+        2. Runs until all input is consumed AND program polls for more
+        3. Optionally includes the VT100 screen state in the result
+        
+        Args:
+            data: String to write to console UART RX
+            max_steps: Maximum instructions to execute
+            include_screen: Whether to include screen text in result
+            
+        Returns:
+            Dictionary with:
+                - status: Execution status
+                - instructions: Total instructions executed
+                - pc: Final PC value
+                - screen: VT100 screen text (if include_screen=True)
+                - error: Error message if any
+        """
+        # Inject input
+        self.console_uart_write(data)
+        
+        # Run until input consumed and idle
+        result = self.run_until_input_consumed(max_steps)
+        
+        response = {
+            'status': result.status,
+            'instructions': result.instruction_count,
+            'pc': result.pc,
+            'error': result.error
+        }
+        
+        if include_screen:
+            response['screen'] = self.get_screen_text()
+        
+        return response
+    
+    def interactive_step(self, data, max_steps=5000000):
+        """
+        High-level interactive step: inject input, run until idle, return screen.
+        
+        This is the "do what I mean" method for interactive programs.
+        Equivalent to send_input_and_run with include_screen=True.
+        
+        Args:
+            data: Input string (can include special chars like Enter as \\n)
+            max_steps: Maximum instructions
+            
+        Returns:
+            Dictionary with status, instructions, pc, screen, error
+        """
+        return self.send_input_and_run(data, max_steps, include_screen=True)
+    
     # UART I/O methods
     
     # Debug UART (0x10000000) - TX only, typically used by printf/diagnostics
