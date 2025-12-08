@@ -1,5 +1,0 @@
-bcond tp 0x801a3c1a
-c
-r
-t 10
-q

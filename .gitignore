@@ -1,10 +1,11 @@
-venv
-*.pyc
+# Python
+venv/
 __pycache__/
+*.pyc
+.coverage
+.pytest_cache/
 
-!Makefile
-
-# Assembly test build artifacts
+# Build artifacts
 *.bin
 *.o
 *.lst
@@ -12,4 +13,24 @@ __pycache__/
 *.map
 *.d
 
+# Keep Makefiles
+!Makefile
+
+# Simulator runtime files
 pyrv32_sim_fs/
+pyrv32_mcp/pyrv32_sim_fs/
+*.log
+/output.log
+
+# Archive folder (can be removed entirely later)
+_archive/
+
+# Editor/IDE
+.vscode/
+*.swp
+*.swo
+
+# NetHack build artifacts (keep source)
+nethack-3.4.3/src/*.o
+nethack-3.4.3/util/*.o
+nethack_datafiles/

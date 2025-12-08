@@ -1,124 +1,67 @@
-# pyrv32 - Simple RV32IMC Instruction Simulator
+# pyrv32 - RISC-V RV32IM Simulator
 
-A simple, easy-to-understand RISC-V RV32IMC instruction simulator in Python.
-Not cycle-accurate. Designed for simulating user-space programs.
+A Python RISC-V RV32IM instruction simulator with Linux syscall emulation and MCP server interface for AI agent control. Runs NetHack 3.4.3 and other programs.
 
-## RV32IMC Registers
+## Quick Start
 
-### General Purpose Registers (x0-x31)
-- **x0**: Always hardwired to zero (reads always return 0, writes are ignored)
-- **x1-x31**: 32-bit general purpose registers
-- Common ABI names:
-  - x0 = zero
-  - x1 = ra (return address)
-  - x2 = sp (stack pointer)
-  - x3 = gp (global pointer)
-  - x4 = tp (thread pointer)
-  - x5-x7 = t0-t2 (temporaries)
-  - x8 = s0/fp (saved register / frame pointer)
-  - x9 = s1 (saved register)
-  - x10-x11 = a0-a1 (function arguments / return values)
-  - x12-x17 = a2-a7 (function arguments)
-  - x18-x27 = s2-s11 (saved registers)
-  - x28-x31 = t3-t6 (temporaries)
+```bash
+# Run unit tests
+python3 -m pytest tests/
 
-### Program Counter (PC)
-- 32-bit register pointing to the current instruction
-- Increments by 4 for normal instructions (2 for compressed)
-- Modified by branches, jumps, and exceptions
+# Run a program
+python3 pyrv32.py firmware/hello.elf
 
-### CSRs (Control and Status Registers)
-For a simple user-space simulator, minimal CSR set:
-- **mstatus** (0x300): Machine status register
-- **mtvec** (0x305): Machine trap-vector base-address
-- **mepc** (0x341): Machine exception program counter
-- **mcause** (0x342): Machine trap cause
-- **mie** (0x304): Machine interrupt-enable
-- **mip** (0x344): Machine interrupt-pending
+# Start MCP server (for AI agent control)
+cd pyrv32_mcp && python3 sim_server_mcp_v2.py &
 
-## Python Representation
+# Build and run NetHack
+cd nethack-3.4.3/sys/pyrv32 && ./setup.sh
+cd nethack-3.4.3 && make -j4
+# Then load nethack-3.4.3/src/nethack.elf via MCP
+```
 
-### General Purpose Registers
-- Simple list: `regs = [0] * 32`
-- Direct indexing with register numbers (0-31)
-- x0 hardwired to zero via special handling in read/write methods
+## Features
 
-### Program Counter
-- Plain integer: `pc = 0`
-
-### CSRs
-- Dictionary mapping address to value: `csrs = {0x300: 0, ...}`
+- **RV32IM ISA**: Full base integer + multiply/divide instructions
+- **Linux Syscalls**: read, write, open, close, stat, brk, exit, etc.
+- **VT100 Terminal**: Full terminal emulation for curses programs
+- **MCP Server**: AI agent control via Model Context Protocol
+- **Symbolic Debugging**: Symbol lookup, source-level disassembly, breakpoints
+- **ELF Loading**: Direct loading of cross-compiled ELF binaries
 
 ## Project Structure
 
 ```
 pyrv32/
-├── README.md           # This file
-├── pyrv32.py           # Main entry point
-├── cpu.py              # CPU register state (x0-x31, PC, CSRs)
-├── memory.py           # Byte-addressable memory with UART
-├── uart.py             # UART transmitter module
-├── decoder.py          # Instruction decoder
-├── execute.py          # Instruction execution engine
-├── tests/              # Unit tests
-│   └── test_*.py       # CPU, memory, decoder, execute tests
-└── asm_tests/          # Assembly test framework
-    ├── run_tests.py    # Test runner with auto-verification
-    ├── Makefile        # Build using riscv64-unknown-elf toolchain
-    ├── basic/          # RV32I base instruction tests
-    └── m_ext/          # M extension tests
+├── cpu.py, memory.py, decoder.py, execute.py  # Core simulator
+├── syscalls.py          # Linux syscall emulation
+├── pyrv32_system.py     # High-level simulator API
+├── uart.py              # UART + VT100 terminal
+├── firmware/            # Runtime library + test programs
+├── tests/               # Python unit tests
+├── asm_tests/           # Assembly instruction tests
+├── pyrv32_mcp/          # MCP server for AI control
+├── nethack-3.4.3/       # NetHack 3.4.3 source
+└── pyrv32_sim_fs/       # Virtual filesystem root
 ```
 
-## Features Implemented
+## Documentation
 
-### CPU (cpu.py)
-- 32 general purpose registers (x0-x31)
-- Program counter (PC)
-- Control and Status Registers (CSRs)
-- x0 hardwired to zero
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Memory map, syscalls, MCP tools
+- [MEMORY_MAP.md](MEMORY_MAP.md) - Detailed memory layout
+- [firmware/README.md](firmware/README.md) - Runtime library
+- [pyrv32_mcp/README.md](pyrv32_mcp/README.md) - MCP server usage
 
-### Memory (memory.py)
-- Sparse byte-addressable memory (dict-based)
-- Little-endian word/halfword access
-- Memory-mapped UART TX at **0x10000000**
-- UART module (uart.py) writes raw binary output
+## Building Programs
 
-### Decoder & Executor (decoder.py, execute.py)
-- Instruction decoder extracts opcode, funct3, funct7, registers, immediates
-- Executor implements RV32I base ISA (~95% complete)
-- Full M extension support (multiply/divide) - 8/8 instructions (100%) ✅
-- See source files for detailed instruction listings and implementation notes
+Cross-compile with the RISC-V toolchain:
 
-## Quick Start
-
-Run the simulator (includes all tests):
 ```bash
-python3 pyrv32.py
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 \
+    -Tfirmware/link.ld -o program.elf \
+    firmware/crt0.S firmware/syscalls.c your_program.c -lc -lgcc
 ```
 
-This will:
-1. Run all unit tests (CPU, memory, decoder, execute)
-2. Run all assembly tests (basic + M extension)
-3. Display results
+## License
 
-Run binary file:
-```bash
-python3 pyrv32.py program.bin          # Run with all tests first
-python3 pyrv32.py --no-test prog.bin   # Run without tests
-python3 pyrv32.py -v program.bin       # Run with instruction trace
-```
-
-Run only assembly tests:
-```bash
-python3 pyrv32.py --asm-test           # Assembly tests only
-python3 pyrv32.py --asm-test -v        # Verbose mode
-```
-
-## Design Principles
-
-1. **Clarity over performance**: Code should be easy to read and understand
-2. **Explicit over implicit**: Make operations obvious
-3. **Simple data structures**: Use lists and basic types
-4. **Minimal abstraction**: Don't over-engineer
-5. **Modular organization**: Separate files by logical function
-6. **Comprehensive testing**: Unit tests + assembly tests
+MIT License. NetHack has its own license (see nethack-3.4.3/dat/license).
